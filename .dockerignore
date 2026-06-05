@@ -1,0 +1,14 @@
+.git/
+bin/
+aws/
+terraform/
+docs/
+.github/
+.husky/
+.claude/
+*.out
+.env
+.docker-built
+CLAUDE.md
+README.md
+Makefile
