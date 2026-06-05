@@ -2,6 +2,7 @@ package internal
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -148,3 +149,108 @@ func TestRuleWithHourRangeFromHigherThanToAngleBiggerThanFrom(t *testing.T) {
 func getTimeForHour(hour float64) time.Time {
 	return time.Date(2025, time.November, 1, int(hour), int((hour-math.Floor(hour))*60.0), 0, 0, time.UTC)
 }
+
+func TestDescribeNamedRule(t *testing.T) {
+	rule := Rule{Name: "Strong NW wind", SpeedRange: Range{5, 15}, AngleRange: Range{270, 360}, HourRange: Range{6, 20}}
+	if rule.Describe() != "Strong NW wind" {
+		t.Errorf("Describe() = %q, want %q", rule.Describe(), "Strong NW wind")
+	}
+}
+
+func TestDescribeUnnamedRule(t *testing.T) {
+	rule := Rule{SpeedRange: Range{5, 15}, AngleRange: Range{45, 135}, HourRange: Range{6, 20}}
+	desc := rule.Describe()
+	if desc == "" {
+		t.Error("Describe() returned empty string for unnamed rule")
+	}
+	for _, want := range []string{"5.0", "15.0", "06:00", "20:00"} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("Describe() = %q, missing %q", desc, want)
+		}
+	}
+}
+
+func TestEvaluateForecastNoMatch(t *testing.T) {
+	reading := &WeatherReading{
+		Readings: map[string]*[]WindDataPoint{
+			"hourly": {
+				{Time: getTimeForHour(10), WindSpeed: 2, WindAngle: 90},
+			},
+		},
+	}
+	rules := []Rule{
+		{SpeedRange: Range{10, 20}, AngleRange: Range{0, 360}, HourRange: Range{0, 23.99}},
+	}
+	triggered := EvaluateForecast(reading, rules)
+	if len(triggered) != 0 {
+		t.Errorf("expected no triggered rules, got %d", len(triggered))
+	}
+	for _, dp := range *reading.Readings["hourly"] {
+		if dp.Matched {
+			t.Error("expected no datapoint to be matched")
+		}
+	}
+}
+
+func TestEvaluateForecastOneMatch(t *testing.T) {
+	dps := []WindDataPoint{
+		{Time: getTimeForHour(10), WindSpeed: 8, WindAngle: 300},
+		{Time: getTimeForHour(15), WindSpeed: 3, WindAngle: 90},
+	}
+	reading := &WeatherReading{
+		Readings: map[string]*[]WindDataPoint{"hourly": &dps},
+	}
+	rules := []Rule{
+		{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}},
+	}
+	triggered := EvaluateForecast(reading, rules)
+	if len(triggered) != 1 {
+		t.Fatalf("expected 1 triggered rule, got %d", len(triggered))
+	}
+	if triggered[0].Name != "NW" {
+		t.Errorf("wrong rule triggered: %s", triggered[0].Name)
+	}
+	if !dps[0].Matched {
+		t.Error("expected first datapoint to be matched")
+	}
+	if dps[1].Matched {
+		t.Error("expected second datapoint not to be matched")
+	}
+}
+
+func TestEvaluateForecastDedupe(t *testing.T) {
+	dps := []WindDataPoint{
+		{Time: getTimeForHour(10), WindSpeed: 8, WindAngle: 300},
+		{Time: getTimeForHour(11), WindSpeed: 9, WindAngle: 310},
+	}
+	reading := &WeatherReading{
+		Readings: map[string]*[]WindDataPoint{"hourly": &dps},
+	}
+	rules := []Rule{
+		{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}},
+	}
+	triggered := EvaluateForecast(reading, rules)
+	if len(triggered) != 1 {
+		t.Errorf("expected deduplicated 1 rule, got %d", len(triggered))
+	}
+}
+
+func TestEvaluateForecastHourlyAndDaily(t *testing.T) {
+	hourly := []WindDataPoint{{Time: getTimeForHour(10), WindSpeed: 8, WindAngle: 300}}
+	daily := []WindDataPoint{{Time: getTimeForHour(12), WindSpeed: 3, WindAngle: 90}}
+	reading := &WeatherReading{
+		Readings: map[string]*[]WindDataPoint{
+			"hourly": &hourly,
+			"daily":  &daily,
+		},
+	}
+	rules := []Rule{
+		{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}},
+		{Name: "E", SpeedRange: Range{0, 5}, AngleRange: Range{60, 120}, HourRange: Range{10, 14}},
+	}
+	triggered := EvaluateForecast(reading, rules)
+	if len(triggered) != 2 {
+		t.Errorf("expected 2 triggered rules (one from each bucket), got %d", len(triggered))
+	}
+}
+

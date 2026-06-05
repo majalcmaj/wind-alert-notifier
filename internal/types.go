@@ -12,4 +12,5 @@ type WindDataPoint struct {
 	Time      time.Time
 	WindSpeed float64
 	WindAngle float64
+	Matched   bool
 }
