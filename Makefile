@@ -36,10 +36,6 @@ lint-fix:
 
 build-docker: .docker-built
 
-run-docker: .docker-built
-	$(CHECK_DOCKER)
-	docker run --name wind-alert --rm -p 9000:8080 --env-file .env --entrypoint /usr/local/bin/aws-lambda-rie $(docker-image) ./main
-
 run-local: .docker-built
 	$(CHECK_DOCKER)
 	docker compose up
