@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Strong NW afternoon wind",
+    "speed": { "from": 6, "to": 25 },
+    "angle": { "from": 270, "to": 360 },
+    "hour":  { "from": 12, "to": 20 }
+  },
+  {
+    "name": "Strong W morning wind",
+    "speed": { "from": 5, "to": 25 },
+    "angle": { "from": 247, "to": 293 },
+    "hour":  { "from": 8, "to": 14 }
+  },
+  {
+    "name": "Any strong wind",
+    "speed": { "from": 8, "to": 30 },
+    "angle": { "from": 0, "to": 360 },
+    "hour":  { "from": 6, "to": 22 }
+  }
+]
