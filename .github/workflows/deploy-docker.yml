@@ -17,12 +17,12 @@ jobs:
     steps:
 
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
-        go-version: 1.25
+        go-version: 1.26
         cache: true
 
     - name: Run lint and tests
