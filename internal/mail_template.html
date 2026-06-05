@@ -103,9 +103,10 @@
 </td></tr></table><![endif]-->
                       </td>
                     </tr>
+                    {{range .Results}}
                     <tr>
                       <td align="left" style="font-size:0px;padding:10px 25px;word-break:break-word;">
-                        <div style="font-family:helvetica;font-size:13px;line-height:1;text-align:left;color:#000000;">Location: {{printf "%.6f,%.6f" .Reading.Lat .Reading.Lon}}</div>
+                        <div style="font-family:helvetica;font-size:16px;line-height:1;text-align:left;color:#000000;">{{.Location.Name}}</div>
                       </td>
                     </tr>
                     <tr>
@@ -175,6 +176,7 @@
                         </table>
                       </td>
                     </tr>
+                    {{end}}
                   </tbody>
                 </table>
               </div>

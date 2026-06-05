@@ -67,22 +67,39 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 	if err != nil {
 		return nil, err
 	}
-	forecast, err := openWeather.GetForecast(54.646034, 18.512407)
-	if err != nil {
-		return nil, err
+
+	var results []internal.LocationResult
+	for _, loc := range internal.Locations {
+		var locRules []internal.Rule
+		for _, r := range internal.AlertRules {
+			if r.LocationID == loc.ID {
+				locRules = append(locRules, r)
+			}
+		}
+		forecast, err := openWeather.GetForecast(loc)
+		if err != nil {
+			return nil, err
+		}
+		triggered := internal.EvaluateForecast(forecast, locRules)
+		if len(triggered) == 0 {
+			continue
+		}
+		descs := make([]string, len(triggered))
+		for i, r := range triggered {
+			descs[i] = r.Describe()
+		}
+		results = append(results, internal.LocationResult{
+			Location:       loc,
+			Reading:        forecast,
+			TriggeredRules: descs,
+		})
 	}
 
-	triggered := internal.EvaluateForecast(forecast, internal.AlertRules)
-	if len(triggered) == 0 {
+	if len(results) == 0 {
 		return &events.APIGatewayProxyResponse{StatusCode: 200, Body: "No rule matched — no mail sent"}, nil
 	}
 
-	descs := make([]string, len(triggered))
-	for i, r := range triggered {
-		descs[i] = r.Describe()
-	}
-
-	mail, err := internal.RenderMail(internal.MailModel{Reading: forecast, TriggeredRules: descs})
+	mail, err := internal.RenderMail(internal.MailModel{Results: results})
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +112,7 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		return nil, err
 	}
 
-	forecastJson, _ := json.MarshalIndent(forecast, "", "  ")
+	forecastJson, _ := json.MarshalIndent(results, "", "  ")
 	return &events.APIGatewayProxyResponse{StatusCode: 200, Body: string(forecastJson)}, nil
 }
 

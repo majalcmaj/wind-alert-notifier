@@ -12,6 +12,7 @@ type Range struct {
 
 type Rule struct {
 	Name       string `json:"name,omitempty"`
+	LocationID string `json:"location_id"`
 	AngleRange Range  `json:"angle"`
 	SpeedRange Range  `json:"speed"`
 	HourRange  Range  `json:"hour"`

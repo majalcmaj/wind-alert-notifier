@@ -37,8 +37,8 @@ func NewOpenWeather(baseUrl, accessToken string) (*OpenWeather, error) {
 	return &OpenWeather{baseUrl, accessToken}, nil
 }
 
-func (o *OpenWeather) GetForecast(latitude, longitude float64) (*WeatherReading, error) {
-	url := fmt.Sprintf("%s/data/3.0/onecall?lat=%f&lon=%f&exclude=current,minutely,alerts&appid=%s", o.baseUrl, latitude, longitude, o.accessToken)
+func (o *OpenWeather) GetForecast(location Location) (*WeatherReading, error) {
+	url := fmt.Sprintf("%s/data/3.0/onecall?lat=%f&lon=%f&exclude=current,minutely,alerts&appid=%s", o.baseUrl, location.Lat, location.Lon, o.accessToken)
 
 	client := http.DefaultClient
 
@@ -64,7 +64,12 @@ func (o *OpenWeather) GetForecast(latitude, longitude float64) (*WeatherReading,
 		return nil, errors.Wrap(err, "Could not parse response body")
 	}
 
-	return parseOpenweatherResponse(body)
+	reading, err := parseOpenweatherResponse(body)
+	if err != nil {
+		return nil, err
+	}
+	reading.Location = location
+	return reading, nil
 }
 
 func parseOpenweatherResponse(content []byte) (*WeatherReading, error) {
@@ -75,8 +80,6 @@ func parseOpenweatherResponse(content []byte) (*WeatherReading, error) {
 	}
 
 	return &WeatherReading{
-		Lat: resp.Lat,
-		Lon: resp.Lon,
 		Readings: map[string][]WindDataPoint{
 			"hourly": getWindDatapoints(resp.Hourly),
 			"daily":  getWindDatapoints(resp.Daily),

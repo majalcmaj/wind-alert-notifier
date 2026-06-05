@@ -18,8 +18,7 @@ func init() {
 }
 
 type MailModel struct {
-	Reading        *WeatherReading
-	TriggeredRules []string
+	Results []LocationResult
 }
 
 func RenderMail(model MailModel) (string, error) {

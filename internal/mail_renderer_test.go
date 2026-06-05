@@ -9,13 +9,12 @@ import (
 )
 
 func makeModel(reading *WeatherReading) MailModel {
-	return MailModel{Reading: reading}
+	return MailModel{Results: []LocationResult{{Location: reading.Location, Reading: reading}}}
 }
 
 func TestRenderingMailDisplaysTitle(t *testing.T) {
 	result, err := RenderMail(makeModel(&WeatherReading{
-		Lat:      40.7128,
-		Lon:      -74.0060,
+		Location: Location{Name: "Test"},
 		Readings: map[string][]WindDataPoint{},
 	}))
 
@@ -28,10 +27,9 @@ func TestRenderingMailDisplaysTitle(t *testing.T) {
 	}
 }
 
-func TestRenderingLatLonInformation(t *testing.T) {
+func TestRenderingLocationName(t *testing.T) {
 	result, err := RenderMail(makeModel(&WeatherReading{
-		Lat:      40.72137,
-		Lon:      -74.15497,
+		Location: Location{Name: "Sopot"},
 		Readings: map[string][]WindDataPoint{},
 	}))
 
@@ -39,15 +37,14 @@ func TestRenderingLatLonInformation(t *testing.T) {
 		t.Fatalf("Expected no error but got: %v", err)
 	}
 
-	if !strings.Contains(result, "40.721370,-74.154970") {
-		t.Errorf("Expected lat/lon information to be present but got '%s'", result)
+	if !strings.Contains(result, "Sopot") {
+		t.Errorf("Expected location name to be present but got '%s'", result)
 	}
 }
 
 func TestRenderingDailyAndHourlyTables(t *testing.T) {
 	reading := WeatherReading{
-		Lat: 40.72137,
-		Lon: -74.15497,
+		Location: Location{Name: "Test"},
 		Readings: map[string][]WindDataPoint{
 			"daily": {
 				{Time: parseTime("2025-01-01T10:00"), WindSpeed: 10, WindAngle: 180},
@@ -77,12 +74,12 @@ func TestRenderingDailyAndHourlyTables(t *testing.T) {
 
 func TestRenderingTriggeredRules(t *testing.T) {
 	model := MailModel{
-		Reading: &WeatherReading{
-			Lat:      0,
-			Lon:      0,
-			Readings: map[string][]WindDataPoint{},
+		Results: []LocationResult{
+			{
+				Reading:        &WeatherReading{Readings: map[string][]WindDataPoint{}},
+				TriggeredRules: []string{"Strong NW afternoon wind", "Any strong wind"},
+			},
 		},
-		TriggeredRules: []string{"Strong NW afternoon wind", "Any strong wind"},
 	}
 
 	result, err := RenderMail(model)
@@ -90,7 +87,7 @@ func TestRenderingTriggeredRules(t *testing.T) {
 		t.Fatalf("Expected no error but got: %v", err)
 	}
 
-	for _, rule := range model.TriggeredRules {
+	for _, rule := range model.Results[0].TriggeredRules {
 		if !strings.Contains(result, rule) {
 			t.Errorf("Expected triggered rule %q in output", rule)
 		}
@@ -99,8 +96,6 @@ func TestRenderingTriggeredRules(t *testing.T) {
 
 func TestRenderingMatchedRowBolded(t *testing.T) {
 	reading := WeatherReading{
-		Lat: 0,
-		Lon: 0,
 		Readings: map[string][]WindDataPoint{
 			"hourly": {
 				{Time: parseTime("2025-01-01T10:00"), WindSpeed: 10, WindAngle: 180, Matched: true},

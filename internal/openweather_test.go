@@ -50,14 +50,14 @@ func TestMakingOpenweatherRequest(t *testing.T) {
 		t.Errorf("Could not construct the OpenWeather instance: %s", err)
 	}
 
-	response, err := openWeather.GetForecast(lat, lon)
+	loc := Location{Lat: lat, Lon: lon}
+	response, err := openWeather.GetForecast(loc)
 	if err != nil {
 		t.Errorf("Error while calling the OpenWeather mock: %s", err)
 	}
 
 	expected := WeatherReading{
-		Lat: lat,
-		Lon: lon,
+		Location: loc,
 		Readings: map[string][]WindDataPoint{
 			"hourly": {
 				{
