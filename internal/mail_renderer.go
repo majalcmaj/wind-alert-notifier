@@ -17,6 +17,12 @@ func init() {
 	}
 }
 
+type LocationResult struct {
+	Location       Location
+	Reading        *WeatherReading
+	TriggeredRules []string
+}
+
 type MailModel struct {
 	Results []LocationResult
 }

@@ -5,6 +5,13 @@ import (
 	"encoding/json"
 )
 
+type Location struct {
+	ID   string  `json:"id"`
+	Name string  `json:"name"`
+	Lat  float64 `json:"lat"`
+	Lon  float64 `json:"lon"`
+}
+
 //go:embed locations.json
 var locationsJSON []byte
 

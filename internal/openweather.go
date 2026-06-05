@@ -12,6 +12,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+type WeatherReading struct {
+	Location Location
+	Readings map[string][]WindDataPoint
+}
+
+type WindDataPoint struct {
+	Time      time.Time
+	WindSpeed float64
+	WindAngle float64
+	Matched   bool
+}
+
 type reading struct {
 	Dt        int     `json:"dt"`
 	WindSpeed float64 `json:"wind_speed"`
