@@ -1,0 +1,9 @@
+services:
+  wind-alert:
+    image: wind-alert:latest
+    ports:
+      - "9000:8080"
+    entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
+    env_file: .env
+    environment:
+      - LOCAL_MODE=true

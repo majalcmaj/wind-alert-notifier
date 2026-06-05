@@ -4,7 +4,7 @@ GO_SOURCES = $(shell find . -name '*.go' -not -path './vendor/*')
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
-.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-test-request generate
+.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-local stop-local run-test-request generate
 
 clean:
 	rm -rf bin test-coverage.out .docker-built
@@ -39,6 +39,13 @@ build-docker: .docker-built
 run-docker: .docker-built
 	$(CHECK_DOCKER)
 	docker run --name wind-alert --rm -p 9000:8080 --env-file .env --entrypoint /usr/local/bin/aws-lambda-rie $(docker-image) ./main
+
+run-local: .docker-built
+	$(CHECK_DOCKER)
+	docker compose up
+
+stop-local:
+	docker compose down
 
 run-test-request:
 	curl "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{}'
