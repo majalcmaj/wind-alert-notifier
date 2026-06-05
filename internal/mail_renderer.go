@@ -17,9 +17,14 @@ func init() {
 	}
 }
 
-func RenderMail(weatherReading *WeatherReading) (string, error) {
+type MailModel struct {
+	Reading        *WeatherReading
+	TriggeredRules []string
+}
+
+func RenderMail(model MailModel) (string, error) {
 	buffer := new(bytes.Buffer)
-	err := tpl.Execute(buffer, weatherReading)
+	err := tpl.Execute(buffer, model)
 	if err != nil {
 		return "", err
 	}

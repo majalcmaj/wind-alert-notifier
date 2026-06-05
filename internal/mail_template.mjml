@@ -4,7 +4,14 @@
       <mj-column>
         <mj-text font-size="20px" font-family="helvetica">Wind Alert!</mj-text>
         <mj-divider border-color="#F45E43"></mj-divider>
-        <mj-text font-family="helvetica">Location: {{printf "%.6f,%.6f" .Lat .Lon}}</mj-text>
+        <mj-text font-family="helvetica">Location: {{printf "%.6f,%.6f" .Reading.Lat .Reading.Lon}}</mj-text>
+        {{if .TriggeredRules}}
+        <mj-text font-family="helvetica">Triggered rules:
+          <ul>
+            {{range .TriggeredRules}}<li>{{.}}</li>{{end}}
+          </ul>
+        </mj-text>
+        {{end}}
         <mj-text font-family="helvetica">Daily forecast:</mj-text>
         <mj-table>
           <tr style="border-bottom:1px solid #ecedee;text-align:left;padding:15px 0;">
@@ -12,11 +19,11 @@
             <th style="padding: 0 15px;">Wind speed</th>
             <th style="padding: 0 0 0 15px;">Wind angle</th>
           </tr>
-          {{range .Readings.daily}}
+          {{range .Reading.Readings.daily}}
           <tr>
-            <td style="padding: 0 15px 0 0;">{{.Time.Format "2006-01-02 15:04"}}</td>
-            <td style="padding: 0 15px;">{{printf "%.1f" .WindSpeed}}</td>
-            <td style="padding: 0 0 0 15px;">{{windArrow .WindAngle}}</td>
+            <td style="padding: 0 15px 0 0;">{{if .Matched}}<strong>{{.Time.Format "2006-01-02 15:04"}}</strong>{{else}}{{.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+            <td style="padding: 0 15px;">{{if .Matched}}<strong>{{printf "%.1f" .WindSpeed}}</strong>{{else}}{{printf "%.1f" .WindSpeed}}{{end}}</td>
+            <td style="padding: 0 0 0 15px;">{{if .Matched}}<strong>{{windArrow .WindAngle}}</strong>{{else}}{{windArrow .WindAngle}}{{end}}</td>
           </tr>
           {{end}}
         </mj-table>
@@ -27,11 +34,11 @@
             <th style="padding: 0 15px;">Wind speed</th>
             <th style="padding: 0 0 0 15px;">Wind angle</th>
           </tr>
-          {{range .Readings.hourly}}
+          {{range .Reading.Readings.hourly}}
           <tr>
-            <td style="padding: 0 15px 0 0;">{{.Time.Format "2006-01-02 15:04"}}</td>
-            <td style="padding: 0 15px;">{{printf "%.1f" .WindSpeed}}</td>
-            <td style="padding: 0 0 0 15px;">{{windArrow .WindAngle}}</td>
+            <td style="padding: 0 15px 0 0;">{{if .Matched}}<strong>{{.Time.Format "2006-01-02 15:04"}}</strong>{{else}}{{.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+            <td style="padding: 0 15px;">{{if .Matched}}<strong>{{printf "%.1f" .WindSpeed}}</strong>{{else}}{{printf "%.1f" .WindSpeed}}{{end}}</td>
+            <td style="padding: 0 0 0 15px;">{{if .Matched}}<strong>{{windArrow .WindAngle}}</strong>{{else}}{{windArrow .WindAngle}}{{end}}</td>
           </tr>
           {{end}}
         </mj-table>

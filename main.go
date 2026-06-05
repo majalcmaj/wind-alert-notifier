@@ -35,15 +35,28 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		return nil, err
 	}
 
-	config, err := config.LoadDefaultConfig(ctx)
+	triggered := internal.EvaluateForecast(forecast, internal.AlertRules)
+	if len(triggered) == 0 {
+		return &events.APIGatewayProxyResponse{
+			StatusCode: 200,
+			Body:       "No rule matched — no mail sent",
+		}, nil
+	}
+
+	descs := make([]string, len(triggered))
+	for i, r := range triggered {
+		descs[i] = r.Describe()
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	sesClient := sesv2.NewFromConfig(config)
+	sesClient := sesv2.NewFromConfig(cfg)
 
 	forecastJson, _ := json.MarshalIndent(forecast, "", "  ")
-	mail, err := internal.RenderMail(forecast)
+	mail, err := internal.RenderMail(internal.MailModel{Reading: forecast, TriggeredRules: descs})
 	if err != nil {
 		return nil, err
 	}

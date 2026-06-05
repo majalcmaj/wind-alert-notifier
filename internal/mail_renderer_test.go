@@ -8,12 +8,16 @@ import (
 	"time"
 )
 
+func makeModel(reading *WeatherReading) MailModel {
+	return MailModel{Reading: reading}
+}
+
 func TestRenderingMailDisplaysTitle(t *testing.T) {
-	result, err := RenderMail(&WeatherReading{
+	result, err := RenderMail(makeModel(&WeatherReading{
 		Lat:      40.7128,
 		Lon:      -74.0060,
 		Readings: map[string]*[]WindDataPoint{},
-	})
+	}))
 
 	if err != nil {
 		t.Fatalf("Expected no error but got: %v", err)
@@ -25,11 +29,11 @@ func TestRenderingMailDisplaysTitle(t *testing.T) {
 }
 
 func TestRenderingLatLonInformation(t *testing.T) {
-	result, err := RenderMail(&WeatherReading{
+	result, err := RenderMail(makeModel(&WeatherReading{
 		Lat:      40.72137,
 		Lon:      -74.15497,
 		Readings: map[string]*[]WindDataPoint{},
-	})
+	}))
 
 	if err != nil {
 		t.Fatalf("Expected no error but got: %v", err)
@@ -56,7 +60,7 @@ func TestRenderingDailyAndHourlyTables(t *testing.T) {
 		},
 	}
 
-	renderedMail, err := RenderMail(&reading)
+	renderedMail, err := RenderMail(makeModel(&reading))
 
 	if err != nil {
 		t.Fatalf("Expected no error but got: %v", err)
@@ -71,6 +75,58 @@ func TestRenderingDailyAndHourlyTables(t *testing.T) {
 	}
 }
 
+func TestRenderingTriggeredRules(t *testing.T) {
+	model := MailModel{
+		Reading: &WeatherReading{
+			Lat:      0,
+			Lon:      0,
+			Readings: map[string]*[]WindDataPoint{},
+		},
+		TriggeredRules: []string{"Strong NW afternoon wind", "Any strong wind"},
+	}
+
+	result, err := RenderMail(model)
+	if err != nil {
+		t.Fatalf("Expected no error but got: %v", err)
+	}
+
+	for _, rule := range model.TriggeredRules {
+		if !strings.Contains(result, rule) {
+			t.Errorf("Expected triggered rule %q in output", rule)
+		}
+	}
+}
+
+func TestRenderingMatchedRowBolded(t *testing.T) {
+	reading := WeatherReading{
+		Lat: 0,
+		Lon: 0,
+		Readings: map[string]*[]WindDataPoint{
+			"hourly": {
+				{Time: parseTime("2025-01-01T10:00"), WindSpeed: 10, WindAngle: 180, Matched: true},
+				{Time: parseTime("2025-01-01T11:00"), WindSpeed: 5, WindAngle: 90, Matched: false},
+			},
+			"daily": {},
+		},
+	}
+
+	result, err := RenderMail(makeModel(&reading))
+	if err != nil {
+		t.Fatalf("Expected no error but got: %v", err)
+	}
+
+	boldPattern := regexp.MustCompile(`<strong>.*10\.0.*</strong>`)
+	if !boldPattern.MatchString(result) {
+		t.Errorf("Expected matched row (10.0) to be bolded in:\n%s", result)
+	}
+
+	nonBoldTime := "2025-01-01 11:00"
+	boldPatternUnmatched := regexp.MustCompile(`<strong>.*` + nonBoldTime + `.*</strong>`)
+	if boldPatternUnmatched.MatchString(result) {
+		t.Errorf("Expected unmatched row (%s) NOT to be bolded", nonBoldTime)
+	}
+}
+
 func parseTime(tStr string) time.Time {
 	tm, err := time.Parse(time.RFC3339, tStr+":00Z")
 	if err != nil {
@@ -81,7 +137,8 @@ func parseTime(tStr string) time.Time {
 
 func matchRow(t *testing.T, mailHtml string, row WindDataPoint) {
 	tableRegEx := regexp.MustCompile(
-		fmt.Sprintf(`(?s)<tr.*>.*<td.*>%s</td>.*<td.*>%.1f</td>.*<td.*>%s</td>.*</tr>`, row.Time.Format("2006-01-02 15:04"), row.WindSpeed, renderWindArrow(row.WindAngle)))
+		fmt.Sprintf(`(?s)<tr.*>.*<td.*>.*%s.*</td>.*<td.*>.*%.1f.*</td>.*<td.*>.*%s.*</td>.*</tr>`,
+			row.Time.Format("2006-01-02 15:04"), row.WindSpeed, renderWindArrow(row.WindAngle)))
 
 	match := tableRegEx.MatchString(mailHtml)
 	if !match {
