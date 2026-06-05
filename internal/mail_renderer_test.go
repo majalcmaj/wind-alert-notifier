@@ -16,7 +16,7 @@ func TestRenderingMailDisplaysTitle(t *testing.T) {
 	result, err := RenderMail(makeModel(&WeatherReading{
 		Lat:      40.7128,
 		Lon:      -74.0060,
-		Readings: map[string]*[]WindDataPoint{},
+		Readings: map[string][]WindDataPoint{},
 	}))
 
 	if err != nil {
@@ -32,7 +32,7 @@ func TestRenderingLatLonInformation(t *testing.T) {
 	result, err := RenderMail(makeModel(&WeatherReading{
 		Lat:      40.72137,
 		Lon:      -74.15497,
-		Readings: map[string]*[]WindDataPoint{},
+		Readings: map[string][]WindDataPoint{},
 	}))
 
 	if err != nil {
@@ -48,7 +48,7 @@ func TestRenderingDailyAndHourlyTables(t *testing.T) {
 	reading := WeatherReading{
 		Lat: 40.72137,
 		Lon: -74.15497,
-		Readings: map[string]*[]WindDataPoint{
+		Readings: map[string][]WindDataPoint{
 			"daily": {
 				{Time: parseTime("2025-01-01T10:00"), WindSpeed: 10, WindAngle: 180},
 				{Time: parseTime("2025-01-02T10:00"), WindSpeed: 20, WindAngle: 80},
@@ -66,11 +66,11 @@ func TestRenderingDailyAndHourlyTables(t *testing.T) {
 		t.Fatalf("Expected no error but got: %v", err)
 	}
 
-	for _, row := range *reading.Readings["daily"] {
+	for _, row := range reading.Readings["daily"] {
 		matchRow(t, renderedMail, row)
 	}
 
-	for _, row := range *reading.Readings["hourly"] {
+	for _, row := range reading.Readings["hourly"] {
 		matchRow(t, renderedMail, row)
 	}
 }
@@ -80,7 +80,7 @@ func TestRenderingTriggeredRules(t *testing.T) {
 		Reading: &WeatherReading{
 			Lat:      0,
 			Lon:      0,
-			Readings: map[string]*[]WindDataPoint{},
+			Readings: map[string][]WindDataPoint{},
 		},
 		TriggeredRules: []string{"Strong NW afternoon wind", "Any strong wind"},
 	}
@@ -101,7 +101,7 @@ func TestRenderingMatchedRowBolded(t *testing.T) {
 	reading := WeatherReading{
 		Lat: 0,
 		Lon: 0,
-		Readings: map[string]*[]WindDataPoint{
+		Readings: map[string][]WindDataPoint{
 			"hourly": {
 				{Time: parseTime("2025-01-01T10:00"), WindSpeed: 10, WindAngle: 180, Matched: true},
 				{Time: parseTime("2025-01-01T11:00"), WindSpeed: 5, WindAngle: 90, Matched: false},

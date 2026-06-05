@@ -34,13 +34,13 @@ func (r Rule) matches(dp WindDataPoint) bool {
 		r.HourRange.withinCyclicRange(float64(dp.Time.Hour())+float64(dp.Time.Minute())/60.0)
 }
 
-func RunRuleEngine(dataPoint WindDataPoint, rules *[]Rule) (bool, error) {
-	for _, rule := range *rules {
+func RunRuleEngine(dataPoint WindDataPoint, rules []Rule) bool {
+	for _, rule := range rules {
 		if rule.matches(dataPoint) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 func angleToCompass(angle float64) string {
@@ -88,10 +88,9 @@ func EvaluateForecast(reading *WeatherReading, rules []Rule) []Rule {
 	for _, rule := range rules {
 		matched := false
 		for _, dps := range reading.Readings {
-			for i := range *dps {
-				dp := &(*dps)[i]
-				if rule.matches(*dp) {
-					dp.Matched = true
+			for i := range dps {
+				if rule.matches(dps[i]) {
+					dps[i].Matched = true
 					matched = true
 				}
 			}

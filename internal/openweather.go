@@ -37,7 +37,7 @@ func NewOpenWeather(baseUrl, accessToken string) (*OpenWeather, error) {
 	return &OpenWeather{baseUrl, accessToken}, nil
 }
 
-func (o *OpenWeather) GetForecast(latitude float32, longitude float32) (*WeatherReading, error) {
+func (o *OpenWeather) GetForecast(latitude, longitude float64) (*WeatherReading, error) {
 	url := fmt.Sprintf("%s/data/3.0/onecall?lat=%f&lon=%f&exclude=current,minutely,alerts&appid=%s", o.baseUrl, latitude, longitude, o.accessToken)
 
 	client := http.DefaultClient
@@ -60,17 +60,16 @@ func (o *OpenWeather) GetForecast(latitude float32, longitude float32) (*Weather
 	}()
 
 	body, err := io.ReadAll(response.Body)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not parse response body")
 	}
 
-	return parseOpenweatherResponse(&body)
+	return parseOpenweatherResponse(body)
 }
 
-func parseOpenweatherResponse(content *[]byte) (*WeatherReading, error) {
+func parseOpenweatherResponse(content []byte) (*WeatherReading, error) {
 	var resp openWeatherResponse
-	err := json.Unmarshal(*content, &resp)
+	err := json.Unmarshal(content, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -78,21 +77,21 @@ func parseOpenweatherResponse(content *[]byte) (*WeatherReading, error) {
 	return &WeatherReading{
 		Lat: resp.Lat,
 		Lon: resp.Lon,
-		Readings: map[string]*[]WindDataPoint{
-			"hourly": getWindDatapoints(&resp.Hourly),
-			"daily":  getWindDatapoints(&resp.Daily),
+		Readings: map[string][]WindDataPoint{
+			"hourly": getWindDatapoints(resp.Hourly),
+			"daily":  getWindDatapoints(resp.Daily),
 		},
 	}, nil
 }
 
-func getWindDatapoints(readings *[]reading) *[]WindDataPoint {
-	result := make([]WindDataPoint, len(*readings))
-	for idx, reading := range *readings {
+func getWindDatapoints(readings []reading) []WindDataPoint {
+	result := make([]WindDataPoint, len(readings))
+	for idx, r := range readings {
 		result[idx] = WindDataPoint{
-			Time:      time.Unix(int64(reading.Dt), 0),
-			WindSpeed: float64(reading.WindSpeed),
-			WindAngle: float64(reading.WindDeg),
+			Time:      time.Unix(int64(r.Dt), 0),
+			WindSpeed: r.WindSpeed,
+			WindAngle: float64(r.WindDeg),
 		}
 	}
-	return &result
+	return result
 }

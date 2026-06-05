@@ -5,7 +5,7 @@ import "time"
 type WeatherReading struct {
 	Lat      float64
 	Lon      float64
-	Readings map[string]*[]WindDataPoint
+	Readings map[string][]WindDataPoint
 }
 
 type WindDataPoint struct {

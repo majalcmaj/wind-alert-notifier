@@ -40,7 +40,7 @@ func TestMakingOpenweatherRequest(t *testing.T) {
 		if err != nil {
 			t.Errorf("Could not read test data, err: %s", err)
 		}
-		_, _ = w.Write([]byte(*content))
+		_, _ = w.Write(content)
 	}))
 	defer server.Close()
 
@@ -58,7 +58,7 @@ func TestMakingOpenweatherRequest(t *testing.T) {
 	expected := WeatherReading{
 		Lat: lat,
 		Lon: lon,
-		Readings: map[string]*[]WindDataPoint{
+		Readings: map[string][]WindDataPoint{
 			"hourly": {
 				{
 					Time:      time.Unix(1684926000, 0),
@@ -80,10 +80,6 @@ func TestMakingOpenweatherRequest(t *testing.T) {
 	}
 }
 
-func readTestData() (*[]byte, error) {
-	content, err := os.ReadFile("testdata/openWeatherMap.json")
-	if err != nil {
-		return nil, err
-	}
-	return &content, nil
+func readTestData() ([]byte, error) {
+	return os.ReadFile("testdata/openWeatherMap.json")
 }

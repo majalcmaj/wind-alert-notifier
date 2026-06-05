@@ -11,12 +11,7 @@ func TestPassingEmptyRule(t *testing.T) {
 	reading := WindDataPoint{Time: time.Now(), WindSpeed: 10.0, WindAngle: 30.0}
 	rules := []Rule{}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != false {
+	if RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return false when no rules are passed")
 	}
 }
@@ -46,12 +41,7 @@ func TestPassingNoMatchingRules(t *testing.T) {
 		},
 	}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != false {
+	if RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return false for no matching rules")
 	}
 }
@@ -76,12 +66,7 @@ func TestPassingSingleMatchingRule(t *testing.T) {
 		},
 	}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != true {
+	if !RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return true for a data matching the rule")
 	}
 }
@@ -96,12 +81,7 @@ func TestRuleWithAngleRangeFromHigherThanToAngleLessThanTo(t *testing.T) {
 		},
 	}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != true {
+	if !RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return true when rule's from is higher than to and angle is less than to")
 	}
 }
@@ -116,12 +96,7 @@ func TestRuleWithAngleRangeFromHigherThanToAngleBiggerThanFrom(t *testing.T) {
 		},
 	}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != true {
+	if !RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return true when rule's from is higher than to and angle is bigger than from")
 	}
 }
@@ -136,12 +111,7 @@ func TestRuleWithHourRangeFromHigherThanToAngleBiggerThanFrom(t *testing.T) {
 		},
 	}
 
-	result, err := RunRuleEngine(reading, &rules)
-
-	if err != nil {
-		t.Errorf("Got an error: %v", err)
-	}
-	if result != true {
+	if !RunRuleEngine(reading, rules) {
 		t.Errorf("Rule engine should return true when rule's from is higher than to and angle is bigger than from")
 	}
 }
@@ -172,7 +142,7 @@ func TestDescribeUnnamedRule(t *testing.T) {
 
 func TestEvaluateForecastNoMatch(t *testing.T) {
 	reading := &WeatherReading{
-		Readings: map[string]*[]WindDataPoint{
+		Readings: map[string][]WindDataPoint{
 			"hourly": {
 				{Time: getTimeForHour(10), WindSpeed: 2, WindAngle: 90},
 			},
@@ -185,7 +155,7 @@ func TestEvaluateForecastNoMatch(t *testing.T) {
 	if len(triggered) != 0 {
 		t.Errorf("expected no triggered rules, got %d", len(triggered))
 	}
-	for _, dp := range *reading.Readings["hourly"] {
+	for _, dp := range reading.Readings["hourly"] {
 		if dp.Matched {
 			t.Error("expected no datapoint to be matched")
 		}
@@ -198,7 +168,7 @@ func TestEvaluateForecastOneMatch(t *testing.T) {
 		{Time: getTimeForHour(15), WindSpeed: 3, WindAngle: 90},
 	}
 	reading := &WeatherReading{
-		Readings: map[string]*[]WindDataPoint{"hourly": &dps},
+		Readings: map[string][]WindDataPoint{"hourly": dps},
 	}
 	rules := []Rule{
 		{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}},
@@ -224,7 +194,7 @@ func TestEvaluateForecastDedupe(t *testing.T) {
 		{Time: getTimeForHour(11), WindSpeed: 9, WindAngle: 310},
 	}
 	reading := &WeatherReading{
-		Readings: map[string]*[]WindDataPoint{"hourly": &dps},
+		Readings: map[string][]WindDataPoint{"hourly": dps},
 	}
 	rules := []Rule{
 		{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}},
@@ -239,9 +209,9 @@ func TestEvaluateForecastHourlyAndDaily(t *testing.T) {
 	hourly := []WindDataPoint{{Time: getTimeForHour(10), WindSpeed: 8, WindAngle: 300}}
 	daily := []WindDataPoint{{Time: getTimeForHour(12), WindSpeed: 3, WindAngle: 90}}
 	reading := &WeatherReading{
-		Readings: map[string]*[]WindDataPoint{
-			"hourly": &hourly,
-			"daily":  &daily,
+		Readings: map[string][]WindDataPoint{
+			"hourly": hourly,
+			"daily":  daily,
 		},
 	}
 	rules := []Rule{
@@ -253,4 +223,3 @@ func TestEvaluateForecastHourlyAndDaily(t *testing.T) {
 		t.Errorf("expected 2 triggered rules (one from each bucket), got %d", len(triggered))
 	}
 }
-
