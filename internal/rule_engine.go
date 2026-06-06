@@ -6,16 +6,16 @@ import (
 )
 
 type Range struct {
-	From float64 `json:"from"`
-	To   float64 `json:"to"`
+	From float64 `json:"from" dynamodbav:"from"`
+	To   float64 `json:"to"   dynamodbav:"to"`
 }
 
 type Rule struct {
-	Name       string `json:"name,omitempty"`
-	LocationID string `json:"location_id"`
-	AngleRange Range  `json:"angle"`
-	SpeedRange Range  `json:"speed"`
-	HourRange  Range  `json:"hour"`
+	Name       string `json:"name,omitempty" dynamodbav:"name,omitempty"`
+	LocationID string `json:"location_id"    dynamodbav:"location_id"`
+	AngleRange Range  `json:"angle"          dynamodbav:"angle"`
+	SpeedRange Range  `json:"speed"          dynamodbav:"speed"`
+	HourRange  Range  `json:"hour"           dynamodbav:"hour"`
 }
 
 func (rng Range) withinCyclicRange(value float64) bool {

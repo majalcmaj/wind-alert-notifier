@@ -6,10 +6,10 @@ import (
 )
 
 type Location struct {
-	ID   string  `json:"id"`
-	Name string  `json:"name"`
-	Lat  float64 `json:"lat"`
-	Lon  float64 `json:"lon"`
+	ID   string  `json:"id"   dynamodbav:"id"`
+	Name string  `json:"name" dynamodbav:"name"`
+	Lat  float64 `json:"lat"  dynamodbav:"lat"`
+	Lon  float64 `json:"lon"  dynamodbav:"lon"`
 }
 
 //go:embed locations.json
