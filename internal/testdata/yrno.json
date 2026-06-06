@@ -1,0 +1,36 @@
+{
+  "type": "Feature",
+  "properties": {
+    "meta": {
+      "updated_at": "2024-05-24T10:00:00Z",
+      "units": {
+        "wind_speed": "m/s",
+        "wind_from_direction": "degrees"
+      }
+    },
+    "timeseries": [
+      {
+        "time": "2024-05-24T12:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "wind_speed": 5.2,
+              "wind_from_direction": 270.0
+            }
+          }
+        }
+      },
+      {
+        "time": "2024-05-24T13:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "wind_speed": 6.1,
+              "wind_from_direction": 280.0
+            }
+          }
+        }
+      }
+    ]
+  }
+}
