@@ -30,10 +30,39 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource:
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/wind-alert-locations
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/wind-alert-rules
       # RecursiveLoop: Terminate
       # SnapStart:
       #  ApplyOn: None
-  WindAlertRepository: 
+  WindAlertLocationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: wind-alert-locations
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+
+  WindAlertRulesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: wind-alert-rules
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: location_id, AttributeType: S }
+        - { AttributeName: name,        AttributeType: S }
+      KeySchema:
+        - { AttributeName: location_id, KeyType: HASH }
+        - { AttributeName: name,        KeyType: RANGE }
+
+  WindAlertRepository:
     Type: AWS::ECR::Repository
     Properties: 
       RepositoryName: "wind-alert-docker-repository"
