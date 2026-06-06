@@ -93,7 +93,7 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		if err != nil {
 			return nil, err
 		}
-		forecast, err := openWeather.GetForecast(loc)
+		forecast, err := openWeather.GetForecast(ctx, loc)
 		if err != nil {
 			return nil, err
 		}

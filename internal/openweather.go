@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,12 +50,12 @@ func NewOpenWeather(baseUrl, accessToken string) (*OpenWeather, error) {
 	return &OpenWeather{baseUrl, accessToken}, nil
 }
 
-func (o *OpenWeather) GetForecast(location Location) (*WeatherReading, error) {
+func (o *OpenWeather) GetForecast(ctx context.Context, location Location) (*WeatherReading, error) {
 	url := fmt.Sprintf("%s/data/3.0/onecall?lat=%f&lon=%f&exclude=current,minutely,alerts&appid=%s", o.baseUrl, location.Lat, location.Lon, o.accessToken)
 
 	client := http.DefaultClient
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "Cannot create a request")
 	}

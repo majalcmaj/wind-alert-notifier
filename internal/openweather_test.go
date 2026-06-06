@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -51,7 +52,7 @@ func TestMakingOpenweatherRequest(t *testing.T) {
 	}
 
 	loc := Location{Lat: lat, Lon: lon}
-	response, err := openWeather.GetForecast(loc)
+	response, err := openWeather.GetForecast(context.Background(), loc)
 	if err != nil {
 		t.Errorf("Error while calling the OpenWeather mock: %s", err)
 	}
