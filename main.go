@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"github.com/majalcmaj/wind-alert-go/internal"
@@ -46,6 +47,14 @@ func (s *stdoutSender) send(_ context.Context, subject, htmlBody string) error {
 	return nil
 }
 
+func newDynamoDBClient(ctx context.Context) (*dynamodb.Client, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return dynamodb.NewFromConfig(cfg), nil
+}
+
 func newMailSender(ctx context.Context) (mailSender, error) {
 	if os.Getenv("LOCAL_MODE") == "true" {
 		return &stdoutSender{}, nil
@@ -68,13 +77,21 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		return nil, err
 	}
 
+	dynamoClient, err := newDynamoDBClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	locations, err := internal.LoadLocations(ctx, dynamoClient)
+	if err != nil {
+		return nil, err
+	}
+
 	var results []internal.LocationResult
-	for _, loc := range internal.Locations {
-		var locRules []internal.Rule
-		for _, r := range internal.AlertRules {
-			if r.LocationID == loc.ID {
-				locRules = append(locRules, r)
-			}
+	for _, loc := range locations {
+		locRules, err := internal.LoadRulesForLocation(ctx, dynamoClient, loc.ID)
+		if err != nil {
+			return nil, err
 		}
 		forecast, err := openWeather.GetForecast(loc)
 		if err != nil {
