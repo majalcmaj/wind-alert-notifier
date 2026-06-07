@@ -10,7 +10,7 @@ type Forecaster interface {
 }
 
 type NamedForecaster struct {
-	Name      string
+	Name       string
 	Forecaster Forecaster
 }
 
