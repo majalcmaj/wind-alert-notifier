@@ -1,1 +1,2 @@
 openweather_token = "your-openweather-api-token-here"
+icm_meteo_token   = "your-icm-meteo-api-token-here"

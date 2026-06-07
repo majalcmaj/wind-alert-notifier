@@ -14,6 +14,12 @@ variable "openweather_token" {
   sensitive   = true
 }
 
+variable "icm_meteo_token" {
+  description = "ICM Meteo (api.meteo.pl) API token"
+  type        = string
+  sensitive   = true
+}
+
 # ECR
 
 resource "aws_ecr_repository" "wind_alert" {
@@ -120,6 +126,7 @@ resource "aws_lambda_function" "wind_alert" {
   environment {
     variables = {
       OPENWEATHER_TOKEN = var.openweather_token
+      ICM_METEO_TOKEN   = var.icm_meteo_token
     }
   }
 

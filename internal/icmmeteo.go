@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 )
 
@@ -29,15 +30,20 @@ const (
 )
 
 type IcmMeteo struct {
-	baseURL string
-	token   string
+	baseURL    string
+	token      string
+	httpClient *http.Client
 }
 
 func NewIcmMeteo(baseURL, token string) (*IcmMeteo, error) {
 	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(token) == "" {
 		return nil, errors.Errorf("Both the baseURL and token are required")
 	}
-	return &IcmMeteo{baseURL: baseURL, token: token}, nil
+
+	retryClient := retryablehttp.NewClient()
+	retryClient.Logger = nil
+
+	return &IcmMeteo{baseURL: baseURL, token: token, httpClient: retryClient.StandardClient()}, nil
 }
 
 func (i *IcmMeteo) GetForecast(ctx context.Context, loc Location) (*WeatherReading, error) {
@@ -132,7 +138,7 @@ func (i *IcmMeteo) fetchComponent(ctx context.Context, row, col int, field, date
 	}
 	req.Header.Set("Authorization", "Token "+i.token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.httpClient.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "icm: request failed")
 	}
@@ -180,7 +186,7 @@ func (i *IcmMeteo) get(ctx context.Context, path string, out any) error {
 	}
 	req.Header.Set("Authorization", "Token "+i.token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := i.httpClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "icm: request failed")
 	}

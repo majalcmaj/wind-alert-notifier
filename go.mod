@@ -3,26 +3,31 @@ module github.com/majalcmaj/wind-alert-go
 go 1.25.1
 
 require (
-	github.com/aws/aws-lambda-go v1.49.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.12 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.31.17 // indirect
+	github.com/aws/aws-lambda-go v1.49.0
+	github.com/aws/aws-sdk-go-v2 v1.41.12
+	github.com/aws/aws-sdk-go-v2/config v1.31.17
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.46
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.46
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.58.0
+	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.54.2
+	github.com/hashicorp/go-retryablehttp v0.7.8
+	github.com/pkg/errors v0.9.1
+)
+
+require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.21 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.46 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.46 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.13 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.28 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.28 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.58.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.32.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.12 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.12.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.54.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.39.1 // indirect
 	github.com/aws/smithy-go v1.27.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 )
