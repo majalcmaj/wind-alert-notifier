@@ -11,8 +11,8 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
-    name: "Test, build docker image and deploy to AWS Lambda"
+  test:
+    name: "Lint, build and test"
     runs-on: ubuntu-latest
     steps:
 
@@ -31,6 +31,18 @@ jobs:
         make build
         make test
 
+  build-and-push:
+    name: "Build and push Docker image"
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4.3.1
       with:
@@ -42,7 +54,7 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build Docker Image 
+    - name: Build Docker Image
       id: build-image
       env:
         IMAGE_TAG: "513532022998.dkr.ecr.eu-central-1.amazonaws.com/wind-alert:latest"
@@ -51,10 +63,24 @@ jobs:
         docker push ${IMAGE_TAG}
         echo "image=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+  deploy:
+    name: "Deploy to AWS Lambda"
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        aws-region: eu-central-1
+        role-to-assume: arn:aws:iam::513532022998:role/gh-actions-role
+        role-session-name: gh-actions-session
+
     - name: Deploy Lambda function with container image
       uses: aws-actions/aws-lambda-deploy@v1.1.0
       with:
         function-name: wind-alert
-        package-type: Image  
-        image-uri: ${{ steps.build-image.outputs.image }}  # ECR image URI from previous step
-        role: arn:aws:iam::513532022998:role/wind-alert  # IAM execution role for Lambda
+        package-type: Image
+        image-uri: ${{ needs.build-and-push.outputs.image }}
+        role: arn:aws:iam::513532022998:role/wind-alert

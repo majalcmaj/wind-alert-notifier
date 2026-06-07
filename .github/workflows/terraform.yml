@@ -1,0 +1,85 @@
+name: Terraform
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: [ "master" ]
+    paths: [ "terraform/**" ]
+  pull_request:
+    branches: [ "master" ]
+    paths: [ "terraform/**" ]
+
+defaults:
+  run:
+    working-directory: terraform
+
+jobs:
+  validate:
+    name: "Validate and plan"
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.15.5"
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        aws-region: eu-central-1
+        role-to-assume: arn:aws:iam::513532022998:role/gh-actions-role
+        role-session-name: gh-actions-session
+
+    - name: Terraform fmt
+      run: terraform fmt -check -recursive
+
+    - name: Terraform init
+      run: terraform init -input=false
+
+    - name: Terraform validate
+      run: terraform validate
+
+    - name: Terraform plan
+      env:
+        TF_VAR_openweather_token: ${{ secrets.OPENWEATHER_TOKEN }}
+        TF_VAR_icm_meteo_token: ${{ secrets.ICM_METEO_TOKEN }}
+      run: terraform plan -input=false
+
+  apply:
+    name: "Apply (manual approval required)"
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: terraform-apply
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.15.5"
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        aws-region: eu-central-1
+        role-to-assume: arn:aws:iam::513532022998:role/gh-actions-role
+        role-session-name: gh-actions-session
+
+    - name: Terraform init
+      run: terraform init -input=false
+
+    - name: Terraform apply
+      env:
+        TF_VAR_openweather_token: ${{ secrets.OPENWEATHER_TOKEN }}
+        TF_VAR_icm_meteo_token: ${{ secrets.ICM_METEO_TOKEN }}
+      run: terraform apply -input=false -auto-approve
