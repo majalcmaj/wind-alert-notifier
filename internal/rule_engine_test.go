@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -221,5 +222,104 @@ func TestEvaluateForecastHourlyAndDaily(t *testing.T) {
 	triggered := EvaluateForecast(reading, rules)
 	if len(triggered) != 2 {
 		t.Errorf("expected 2 triggered rules (one from each bucket), got %d", len(triggered))
+	}
+}
+
+func makeHourlyReading(speed, angle, hour float64) *WeatherReading {
+	return &WeatherReading{
+		Readings: map[string][]WindDataPoint{
+			"hourly": {{Time: getTimeForHour(hour), WindSpeed: speed, WindAngle: angle}},
+		},
+	}
+}
+
+func TestEvaluateWithConfidenceAllAgree(t *testing.T) {
+	rule := Rule{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}}
+	readings := []ProviderReading{
+		{Name: "p1", Reading: makeHourlyReading(8, 300, 10)},
+		{Name: "p2", Reading: makeHourlyReading(9, 310, 11)},
+		{Name: "p3", Reading: makeHourlyReading(7, 290, 10)},
+	}
+
+	result := EvaluateWithConfidence(readings, []Rule{rule})
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 confident rule, got %d", len(result))
+	}
+	if result[0].Confidence != 1.0 {
+		t.Errorf("expected confidence 1.0, got %f", result[0].Confidence)
+	}
+	if len(result[0].MatchedBy) != 3 {
+		t.Errorf("expected 3 in MatchedBy, got %v", result[0].MatchedBy)
+	}
+	if result[0].TotalProviders != 3 {
+		t.Errorf("expected TotalProviders=3, got %d", result[0].TotalProviders)
+	}
+}
+
+func TestEvaluateWithConfidenceTwoOfThree(t *testing.T) {
+	rule := Rule{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}}
+	readings := []ProviderReading{
+		{Name: "p1", Reading: makeHourlyReading(8, 300, 10)},
+		{Name: "p2", Reading: makeHourlyReading(9, 310, 11)},
+		{Name: "p3", Reading: makeHourlyReading(2, 90, 10)}, // no match
+	}
+
+	result := EvaluateWithConfidence(readings, []Rule{rule})
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+	if result[0].Confidence != 2.0/3.0 {
+		t.Errorf("expected confidence 2/3, got %f", result[0].Confidence)
+	}
+}
+
+func TestEvaluateWithConfidenceNoneMatch(t *testing.T) {
+	rule := Rule{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}}
+	readings := []ProviderReading{
+		{Name: "p1", Reading: makeHourlyReading(1, 90, 10)},
+		{Name: "p2", Reading: makeHourlyReading(1, 90, 10)},
+	}
+
+	result := EvaluateWithConfidence(readings, []Rule{rule})
+
+	if len(result) != 0 {
+		t.Errorf("expected no results when nothing matches, got %d", len(result))
+	}
+}
+
+func TestEvaluateWithConfidenceMinConfidenceFilters(t *testing.T) {
+	rule := Rule{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}, MinConfidence: 0.9}
+	readings := []ProviderReading{
+		{Name: "p1", Reading: makeHourlyReading(8, 300, 10)},
+		{Name: "p2", Reading: makeHourlyReading(9, 310, 11)},
+		{Name: "p3", Reading: makeHourlyReading(2, 90, 10)}, // no match → confidence 0.66 < 0.9
+	}
+
+	result := EvaluateWithConfidence(readings, []Rule{rule})
+
+	if len(result) != 0 {
+		t.Errorf("expected rule filtered by MinConfidence, got %d results", len(result))
+	}
+}
+
+func TestEvaluateWithConfidenceSkipsFailedProviders(t *testing.T) {
+	rule := Rule{Name: "NW", SpeedRange: Range{6, 20}, AngleRange: Range{270, 360}, HourRange: Range{8, 12}}
+	readings := []ProviderReading{
+		{Name: "p1", Reading: makeHourlyReading(8, 300, 10)},
+		{Name: "p2", Err: errors.New("provider down")},
+	}
+
+	result := EvaluateWithConfidence(readings, []Rule{rule})
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+	if result[0].Confidence != 1.0 {
+		t.Errorf("expected confidence 1.0 (1/1 successful), got %f", result[0].Confidence)
+	}
+	if result[0].TotalProviders != 1 {
+		t.Errorf("expected TotalProviders=1, got %d", result[0].TotalProviders)
 	}
 }

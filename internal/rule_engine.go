@@ -11,11 +11,19 @@ type Range struct {
 }
 
 type Rule struct {
-	Name       string `json:"name,omitempty" dynamodbav:"name,omitempty"`
-	LocationID string `json:"location_id"    dynamodbav:"location_id"`
-	AngleRange Range  `json:"angle"          dynamodbav:"angle"`
-	SpeedRange Range  `json:"speed"          dynamodbav:"speed"`
-	HourRange  Range  `json:"hour"           dynamodbav:"hour"`
+	Name          string  `json:"name,omitempty"          dynamodbav:"name,omitempty"`
+	LocationID    string  `json:"location_id"             dynamodbav:"location_id"`
+	AngleRange    Range   `json:"angle"                   dynamodbav:"angle"`
+	SpeedRange    Range   `json:"speed"                   dynamodbav:"speed"`
+	HourRange     Range   `json:"hour"                    dynamodbav:"hour"`
+	MinConfidence float64 `json:"min_confidence,omitempty" dynamodbav:"min_confidence,omitempty"`
+}
+
+type ConfidentRule struct {
+	Rule
+	Confidence     float64
+	MatchedBy      []string
+	TotalProviders int
 }
 
 func (rng Range) withinCyclicRange(value float64) bool {
@@ -82,6 +90,42 @@ func (r Rule) Describe() string {
 		r.AngleRange.From, r.AngleRange.To,
 		formatHour(r.HourRange.From), formatHour(r.HourRange.To),
 	)
+}
+
+func EvaluateWithConfidence(readings []ProviderReading, rules []Rule) []ConfidentRule {
+	var successful []ProviderReading
+	for _, pr := range readings {
+		if pr.Err == nil {
+			successful = append(successful, pr)
+		}
+	}
+	if len(successful) == 0 {
+		return nil
+	}
+
+	var result []ConfidentRule
+	for _, rule := range rules {
+		var matchedBy []string
+		for _, pr := range successful {
+			if len(EvaluateForecast(pr.Reading, []Rule{rule})) > 0 {
+				matchedBy = append(matchedBy, pr.Name)
+			}
+		}
+		if len(matchedBy) == 0 {
+			continue
+		}
+		confidence := float64(len(matchedBy)) / float64(len(successful))
+		if rule.MinConfidence > 0 && confidence < rule.MinConfidence {
+			continue
+		}
+		result = append(result, ConfidentRule{
+			Rule:           rule,
+			Confidence:     confidence,
+			MatchedBy:      matchedBy,
+			TotalProviders: len(successful),
+		})
+	}
+	return result
 }
 
 func EvaluateForecast(reading *WeatherReading, rules []Rule) []Rule {
