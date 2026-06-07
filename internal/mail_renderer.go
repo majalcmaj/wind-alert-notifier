@@ -17,10 +17,16 @@ func init() {
 	}
 }
 
+type ProviderIssue struct {
+	Name  string
+	Error string
+}
+
 type LocationResult struct {
 	Location       Location
 	Reading        *WeatherReading
 	TriggeredRules []ConfidentRule
+	ProviderIssues []ProviderIssue
 }
 
 type MailModel struct {

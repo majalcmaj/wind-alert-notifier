@@ -119,6 +119,16 @@
                         </div>
                       </td>
                     </tr>
+                    {{end}}{{if .ProviderIssues}}
+                    <tr>
+                      <td align="left" style="font-size:0px;padding:10px 25px;word-break:break-word;">
+                        <div style="font-family:helvetica;font-size:13px;line-height:1;text-align:left;color:#F45E43;">Provider issues: <ul>
+                            {{range .ProviderIssues}}
+                            <li>{{.Name}}: {{.Error}}</li>{{end}}
+                          </ul>
+                        </div>
+                      </td>
+                    </tr>
                     {{end}}
                     <tr>
                       <td align="left" style="font-size:0px;padding:10px 25px;word-break:break-word;">

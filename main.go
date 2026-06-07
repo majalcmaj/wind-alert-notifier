@@ -86,6 +86,16 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		return nil, err
 	}
 
+	icmToken := os.Getenv("ICM_METEO_TOKEN")
+	if len(strings.TrimSpace(icmToken)) == 0 {
+		return nil, errors.New("ICM_METEO_TOKEN env variable must be set")
+	}
+
+	icmMeteo, err := internal.NewIcmMeteo("https://api.meteo.pl", icmToken)
+	if err != nil {
+		return nil, err
+	}
+
 	dynamoClient, err := newDynamoDBClient(ctx)
 	if err != nil {
 		return nil, err
@@ -106,6 +116,7 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 			{Name: "openweather", Forecaster: openWeather},
 			{Name: "yrno", Forecaster: internal.NewYrNo("https://api.met.no")},
 			{Name: "openmeteo", Forecaster: internal.NewOpenMeteo("https://api.open-meteo.com")},
+			{Name: "icm-meteo", Forecaster: icmMeteo},
 		}
 		readings := internal.FetchAll(ctx, loc, providers)
 		triggered := internal.EvaluateWithConfidence(readings, locRules)
@@ -114,17 +125,22 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		}
 
 		var displayReading *internal.WeatherReading
+		var providerIssues []internal.ProviderIssue
 		for _, pr := range readings {
 			if pr.Err == nil {
-				displayReading = pr.Reading
-				break
+				if displayReading == nil {
+					displayReading = pr.Reading
+				}
+				continue
 			}
+			providerIssues = append(providerIssues, internal.ProviderIssue{Name: pr.Name, Error: pr.Err.Error()})
 		}
 
 		results = append(results, internal.LocationResult{
 			Location:       loc,
 			Reading:        displayReading,
 			TriggeredRules: triggered,
+			ProviderIssues: providerIssues,
 		})
 	}
 

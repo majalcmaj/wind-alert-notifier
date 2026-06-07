@@ -13,6 +13,13 @@
           </ul>
         </mj-text>
         <mj-raw>{{end}}</mj-raw>
+        <mj-raw>{{if .ProviderIssues}}</mj-raw>
+        <mj-text font-family="helvetica" color="#F45E43">Provider issues:
+          <ul>
+            {{range .ProviderIssues}}<li>{{.Name}}: {{.Error}}</li>{{end}}
+          </ul>
+        </mj-text>
+        <mj-raw>{{end}}</mj-raw>
         <mj-text font-family="helvetica">Daily forecast:</mj-text>
         <mj-table>
           <tr style="border-bottom:1px solid #ecedee;text-align:left;padding:15px 0;">
