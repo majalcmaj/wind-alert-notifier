@@ -10,7 +10,7 @@ ICM's API is structurally very different from the existing three: it has no prec
 
 - Base: `https://api.meteo.pl`, header `Authorization: Token {token}` on every call
 - Hierarchical path: `/api/v1/model/{model}/grid/{grid}/coordinates/{row},{col}/field/{field}/level/{level}/date/{date}/forecast/`
-- `coordinates` are **grid row/col ints**, not lat/lon — convert via `GET /api/v1/model/{model}/grid/{grid}/latlon2rowcol/{lat},{lon}/` → `{"points":[{"row":R,"col":C}]}` (free, not flagged paid)
+- `coordinates` are **grid row/col ints**, not lat/lon — will later be covered. Do not implement it now. Info for testing: endpoint `GET /api/v1/model/{model}/grid/{grid}/latlon2rowcol/{lat},{lon}/` → `{"points":[{"row":R,"col":C}]}` (free, not flagged paid)
 - `date` = a **model run** timestamp `yyyy-mm-ddTHH` (HH ∈ 00/06/12/18/24); list available runs via `GET .../date/` → run-length-encoded `{"dates":[{"starting-date":D,"count":N,"interval":H}, ...]}`. Latest run = last entry's `starting-date + (count-1)*interval` hours.
 - `POST .../forecast/` → `{"times":[...], "data":[...]}` parallel arrays, **paid** (402 if account unfunded)
 - Wind fields: no combined speed/dir; use `uuwind_zht_fcstfld` (U / x-component) and `vvwind_zht_fcstfld` (V / y-component) at "height surface" level — per user's choice. **Open item for implementer**: query the live API once (with the token) to pin down the actual `grid` name (must cover 54.646034, 18.512407) and the actual `level` value both fields expose (e.g. "10" for 10 m) — hardcode these as constants the same way the project already hardcodes the Gdańsk/Sopot coordinates.
@@ -48,11 +48,12 @@ const (
 ```
 
 `GetForecast(ctx, loc)`:
-1. `row, col, err := i.rowCol(ctx, loc)` — GET latlon2rowcol, parse first point
+1. `row, col := hardcoded` right now
 2. `runDate, err := i.latestRunDate(ctx, row, col)` — GET date list, RLE-decode, pick latest
 3. `uTimes, uData, err := i.fetchComponent(ctx, row, col, icmFieldU, runDate)` — POST forecast
 4. `vTimes, vData, err := i.fetchComponent(ctx, row, col, icmFieldV, runDate)` — POST forecast
 5. zip by index (times arrays expected identical — error if lengths differ), compute speed/angle per pair, build `[]WindDataPoint` keyed `"hourly"`, set `reading.Location = loc`
+NOTE: We may run out of budget. Makte sure the whole tool will be resilient to this.
 
 Helper signatures (unexported):
 - `func (i *IcmMeteo) get(ctx context.Context, path string, out any) error` — shared GET+auth-header+JSON-decode, used by rowCol and latestRunDate
@@ -65,6 +66,7 @@ Helper signatures (unexported):
 - Construct once: `icmMeteo, err := internal.NewIcmMeteo("https://api.meteo.pl", icmToken)`
 - Append to the providers slice at `main.go:105-109`: `{Name: "icm-meteo", Forecaster: icmMeteo}`
 
+
 ### 3. Tests — `internal/icmmeteo_test.go`
 
 Mirror `internal/openmeteo_test.go` (httptest.Server, `reflect.DeepEqual` on `[]WindDataPoint`, fixtures in `testdata/`):
@@ -73,6 +75,10 @@ Mirror `internal/openmeteo_test.go` (httptest.Server, `reflect.DeepEqual` on `[]
 - Assert computed `WindSpeed`/`WindAngle` match hand-computed expected values from known U/V pairs (pick simple numbers, e.g. u=0,v=-5 → speed 5, angle 0)
 - New fixtures: `testdata/icmmeteo_rowcol.json`, `testdata/icmmeteo_dates.json`, `testdata/icmmeteo_u.json`, `testdata/icmmeteo_v.json`
 - Add a small table-driven unit test for the U/V → speed/angle conversion covering the four cardinal directions
+
+### 4.5 Resiliency to running out of budget.
+
+If the API runs out of budget it will fail. I would like the mail to include such information. 
 
 ### 4. Cost note to flag for the user (not a code change)
 
