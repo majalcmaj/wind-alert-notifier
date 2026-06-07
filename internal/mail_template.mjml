@@ -4,15 +4,15 @@
       <mj-column>
         <mj-text font-size="20px" font-family="helvetica">Wind Alert!</mj-text>
         <mj-divider border-color="#F45E43"></mj-divider>
-        {{range .Results}}
+        <mj-raw>{{range .Results}}</mj-raw>
         <mj-text font-size="16px" font-family="helvetica">{{.Location.Name}}</mj-text>
-        {{if .TriggeredRules}}
+        <mj-raw>{{if .TriggeredRules}}</mj-raw>
         <mj-text font-family="helvetica">Triggered rules:
           <ul>
-            {{range .TriggeredRules}}<li>{{.}}</li>{{end}}
+            {{range .TriggeredRules}}<li>{{.Describe}} ({{len .MatchedBy}}/{{.TotalProviders}} providers)</li>{{end}}
           </ul>
         </mj-text>
-        {{end}}
+        <mj-raw>{{end}}</mj-raw>
         <mj-text font-family="helvetica">Daily forecast:</mj-text>
         <mj-table>
           <tr style="border-bottom:1px solid #ecedee;text-align:left;padding:15px 0;">
@@ -43,7 +43,7 @@
           </tr>
           {{end}}
         </mj-table>
-        {{end}}
+        <mj-raw>{{end}}</mj-raw>
       </mj-column>
     </mj-section>
   </mj-body>

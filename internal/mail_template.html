@@ -109,15 +109,17 @@
                         <div style="font-family:helvetica;font-size:16px;line-height:1;text-align:left;color:#000000;">{{.Location.Name}}</div>
                       </td>
                     </tr>
+                    {{if .TriggeredRules}}
                     <tr>
                       <td align="left" style="font-size:0px;padding:10px 25px;word-break:break-word;">
                         <div style="font-family:helvetica;font-size:13px;line-height:1;text-align:left;color:#000000;">Triggered rules: <ul>
                             {{range .TriggeredRules}}
-                            <li>{{.}}</li>{{end}}
+                            <li>{{.Describe}} ({{len .MatchedBy}}/{{.TotalProviders}} providers)</li>{{end}}
                           </ul>
                         </div>
                       </td>
                     </tr>
+                    {{end}}
                     <tr>
                       <td align="left" style="font-size:0px;padding:10px 25px;word-break:break-word;">
                         <div style="font-family:helvetica;font-size:13px;line-height:1;text-align:left;color:#000000;">Daily forecast:</div>
