@@ -4,7 +4,7 @@ GO_SOURCES = $(shell find . -name '*.go' -not -path './vendor/*')
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
-.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-local stop-local run-test-request generate
+.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-local stop-local run-test-request invoke-lambda generate
 
 clean:
 	rm -rf bin test-coverage.out .docker-built
@@ -45,6 +45,11 @@ stop-local:
 
 run-test-request:
 	curl "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{}'
+
+invoke-lambda:
+	aws lambda invoke --region eu-central-1 --function-name wind-alert --cli-binary-format raw-in-base64-out --payload '{}' /tmp/wind-alert-invoke.json
+	@cat /tmp/wind-alert-invoke.json | jq .
+	@aws logs tail /aws/lambda/wind-alert --region eu-central-1 --since 2m
 
 internal/mail_template.html: internal/mail_template.mjml
 	npx -y mjml $< -o $@
