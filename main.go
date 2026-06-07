@@ -93,22 +93,29 @@ func handler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.
 		if err != nil {
 			return nil, err
 		}
-		forecast, err := openWeather.GetForecast(ctx, loc)
-		if err != nil {
-			return nil, err
+		providers := []internal.NamedForecaster{
+			{Name: "openweather", Forecaster: openWeather},
+			{Name: "yrno", Forecaster: internal.NewYrNo("https://api.met.no")},
+			{Name: "openmeteo", Forecaster: internal.NewOpenMeteo("https://api.open-meteo.com")},
 		}
-		triggered := internal.EvaluateForecast(forecast, locRules)
+		readings := internal.FetchAll(ctx, loc, providers)
+		triggered := internal.EvaluateWithConfidence(readings, locRules)
 		if len(triggered) == 0 {
 			continue
 		}
-		descs := make([]string, len(triggered))
-		for i, r := range triggered {
-			descs[i] = r.Describe()
+
+		var displayReading *internal.WeatherReading
+		for _, pr := range readings {
+			if pr.Err == nil {
+				displayReading = pr.Reading
+				break
+			}
 		}
+
 		results = append(results, internal.LocationResult{
 			Location:       loc,
-			Reading:        forecast,
-			TriggeredRules: descs,
+			Reading:        displayReading,
+			TriggeredRules: triggered,
 		})
 	}
 

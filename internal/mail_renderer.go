@@ -20,7 +20,7 @@ func init() {
 type LocationResult struct {
 	Location       Location
 	Reading        *WeatherReading
-	TriggeredRules []string
+	TriggeredRules []ConfidentRule
 }
 
 type MailModel struct {

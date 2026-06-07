@@ -76,8 +76,11 @@ func TestRenderingTriggeredRules(t *testing.T) {
 	model := MailModel{
 		Results: []LocationResult{
 			{
-				Reading:        &WeatherReading{Readings: map[string][]WindDataPoint{}},
-				TriggeredRules: []string{"Strong NW afternoon wind", "Any strong wind"},
+				Reading: &WeatherReading{Readings: map[string][]WindDataPoint{}},
+				TriggeredRules: []ConfidentRule{
+					{Rule: Rule{Name: "Strong NW afternoon wind"}},
+					{Rule: Rule{Name: "Any strong wind"}},
+				},
 			},
 		},
 	}
@@ -87,9 +90,10 @@ func TestRenderingTriggeredRules(t *testing.T) {
 		t.Fatalf("Expected no error but got: %v", err)
 	}
 
-	for _, rule := range model.Results[0].TriggeredRules {
-		if !strings.Contains(result, rule) {
-			t.Errorf("Expected triggered rule %q in output", rule)
+	for _, cr := range model.Results[0].TriggeredRules {
+		ruleName := cr.Describe()
+		if !strings.Contains(result, ruleName) {
+			t.Errorf("Expected triggered rule %q in output", ruleName)
 		}
 	}
 }
