@@ -48,11 +48,20 @@ func (s *stdoutSender) send(_ context.Context, subject, htmlBody string) error {
 }
 
 func newDynamoDBClient(ctx context.Context) (*dynamodb.Client, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
+	opts := []func(*config.LoadOptions) error{}
+	if region := os.Getenv("AWS_REGION"); region != "" {
+		opts = append(opts, config.WithRegion(region))
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return dynamodb.NewFromConfig(cfg), nil
+	return dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
+		if endpoint := os.Getenv("DYNAMODB_ENDPOINT"); endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	}), nil
 }
 
 func newMailSender(ctx context.Context) (mailSender, error) {
