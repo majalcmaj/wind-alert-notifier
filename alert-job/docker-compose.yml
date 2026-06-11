@@ -1,3 +1,8 @@
+networks:
+  default:
+    external: true
+    name: wind-alert-net
+
 services:
   wind-alert:
     image: wind-alert:latest
@@ -11,11 +16,3 @@ services:
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - AWS_REGION=eu-central-1
-    depends_on:
-      - dynamodb-local
-
-  dynamodb-local:
-    image: amazon/dynamodb-local:latest
-    ports:
-      - "8005:8000"
-    command: "-jar DynamoDBLocal.jar -sharedDb"

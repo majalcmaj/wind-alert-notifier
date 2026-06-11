@@ -5,7 +5,7 @@ SHARED_SOURCES = $(shell find ../shared -name '*.go')
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
-.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-local stop-local run-test-request invoke-lambda generate
+.PHONY: clean test test-coverage fmt lint lint-fix build build-docker run-docker run-local stop-local run-test-request invoke-lambda generate ensure-dynamo
 
 clean:
 	rm -rf bin test-coverage.out .docker-built
@@ -37,7 +37,10 @@ lint-fix:
 
 build-docker: .docker-built
 
-run-local: .docker-built
+ensure-dynamo:
+	@docker network inspect wind-alert-net >/dev/null 2>&1 || $(MAKE) -C .. up-dynamo
+
+run-local: .docker-built ensure-dynamo
 	$(CHECK_DOCKER)
 	docker compose up
 

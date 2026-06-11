@@ -12,7 +12,7 @@ make lint              # golangci-lint v2 (downloads if absent)
 make lint-fix          # golangci-lint --fix
 make generate          # compile mail_template.mjml → mail_template.html (requires npx)
 make build-docker      # build linux/amd64 Docker image
-make run-docker        # run locally via Lambda RIE on :9000
+make run-local         # run locally via Lambda RIE on :9000 (auto-starts shared DynamoDB Local)
 make run-test-request  # POST {} to local Lambda RIE
 ```
 
@@ -52,4 +52,4 @@ AWS Lambda function (Docker/ECR deployment) that fetches wind forecasts and emai
 
 ## Environment
 
-Copy `.env.template` → `.env` and set `OPENWEATHER_TOKEN`. The `.env` file is used by `make run-docker`.
+Copy `.env.template` → `.env` and set `OPENWEATHER_TOKEN`. The `.env` file is used by `make run-local`.

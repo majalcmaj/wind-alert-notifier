@@ -39,8 +39,12 @@ bin/.rie-proxy-image-id: bin/rie-proxy Dockerfile.rie-proxy
 .PHONY: build-docker
 build-docker: bin/.docker-image-id bin/.rie-proxy-image-id
 
+.PHONY: ensure-dynamo
+ensure-dynamo:
+	@docker network inspect wind-alert-net >/dev/null 2>&1 || $(MAKE) -C .. up-dynamo
+
 .PHONY: run-docker
-run-docker: build-docker
+run-docker: build-docker ensure-dynamo
 	docker compose up
 
 run-test-request:

@@ -7,7 +7,7 @@ ENDPOINT_URL=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --local)
-      ENDPOINT_URL="http://localhost:8005"
+      ENDPOINT_URL="http://localhost:8010"
       shift
       ;;
     --endpoint-url)

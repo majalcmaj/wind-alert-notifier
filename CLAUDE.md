@@ -20,18 +20,38 @@ their `go.mod` so the workspace module resolves locally without a remote module.
 ## Commands
 
 There is no `go.mod` at the repo root, so `./...` does not work from here — always pass explicit
-module paths:
+module paths. The root `Makefile` wraps these:
 
 ```bash
-go build ./shared/... ./alert-job/... ./web/...
-go vet   ./shared/... ./alert-job/... ./web/...
-go test  ./shared/... ./alert-job/... ./web/...
+make build   # go build ./shared/... ./alert-job/... ./web/... + both lambda binaries
+make vet     # go vet   ./shared/... ./alert-job/... ./web/...
+make test    # go test  ./shared/... ./alert-job/... ./web/...
+make ci      # vet + test (what the pre-push hook and CI run)
+make lint    # golangci-lint for alert-job and web
+make fmt     # go fmt across all three modules
+make clean   # clean alert-job and web build artifacts
 ```
 
-The pre-push hook (`.husky/hooks/pre-push`) runs `go vet` and `go test` with these patterns.
+The pre-push hook (`.husky/hooks/pre-push`) runs `make ci`.
 
 Module-specific build/lint/Docker commands (`make build`, `make lint`, `make build-docker`, ...)
 live in each module's own `Makefile` — run them from within `alert-job/` or `web/`.
+
+### Local stack
+
+```bash
+make up    # build both lambda images, start shared DynamoDB Local + table setup, then both lambdas (detached)
+make down  # tear everything down
+make seed  # populate the shared local DynamoDB with sample data (scripts/seed-dynamodb.sh)
+```
+
+`make up` runs a single `dynamodb-local` (root `docker-compose.yml`, host port 8010 → container
+8000) on the
+`wind-alert-net` Docker network. `alert-job/docker-compose.yml` and `web/docker-compose.yml`
+join that network as external, so both lambdas read/write the same
+`wind-alert-locations`/`wind-alert-rules` tables, mirroring production. Running a module's
+own `make run-local` / `make run-docker` standalone auto-creates the shared network and tables
+via `ensure-dynamo`.
 
 ## Infrastructure & CI
 

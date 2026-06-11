@@ -27,12 +27,21 @@ built and deployed independently — see `.github/workflows/ci.yml`.
 ## Building & testing
 
 ```bash
-go build ./shared/... ./alert-job/... ./web/...
-go vet   ./shared/... ./alert-job/... ./web/...
-go test  ./shared/... ./alert-job/... ./web/...
+make build
+make vet
+make test
 ```
 
-(`./...` from the repo root doesn't work — there's no `go.mod` here, only `go.work`.)
+(Equivalent to `go build/vet/test ./shared/... ./alert-job/... ./web/...` — `./...` from the
+repo root doesn't work since there's no `go.mod` here, only `go.work`.)
 
-For module-specific commands (Docker builds, lint, local run), see `alert-job/CLAUDE.md` and
-`web/ARCH.md`.
+## Running locally
+
+```bash
+make up    # shared DynamoDB Local + both lambdas via Docker/Lambda RIE
+make down
+make seed  # populate sample data
+```
+
+For module-specific commands (Docker builds, lint, single-lambda local run), see
+`alert-job/CLAUDE.md` and `web/ARCH.md`.

@@ -26,17 +26,12 @@ jobs:
         cache: true
 
     - name: Vet
-      run: go vet ./shared/... ./alert-job/... ./web/...
+      run: make vet
 
     - name: Test
-      run: go test ./shared/... ./alert-job/... ./web/...
+      run: make test
 
-    - name: Lint alert-job
-      working-directory: alert-job
-      run: make lint
-
-    - name: Lint web
-      working-directory: web
+    - name: Lint
       run: make lint
 
   changes:
