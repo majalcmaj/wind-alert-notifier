@@ -16,10 +16,10 @@ test:
 test-coverage:
 	go test -timeout=30s -cover -coverprofile test-coverage.out ./... && go tool cover -html=test-coverage.out
 
-bin/forecaster: $(GO_SOURCES) $(SHARED_SOURCES) go.mod go.sum
+bin/alert-job: $(GO_SOURCES) $(SHARED_SOURCES) go.mod go.sum
 	go build -tags lambda.norpc -o bin/ .
 
-build: bin/forecaster
+build: bin/alert-job
 
 fmt:
 	go fmt ./...

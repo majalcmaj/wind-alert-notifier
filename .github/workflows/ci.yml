@@ -26,13 +26,13 @@ jobs:
         cache: true
 
     - name: Vet
-      run: go vet ./shared/... ./forecaster/... ./web/...
+      run: go vet ./shared/... ./alert-job/... ./web/...
 
     - name: Test
-      run: go test ./shared/... ./forecaster/... ./web/...
+      run: go test ./shared/... ./alert-job/... ./web/...
 
-    - name: Lint forecaster
-      working-directory: forecaster
+    - name: Lint alert-job
+      working-directory: alert-job
       run: make lint
 
     - name: Lint web
@@ -43,7 +43,7 @@ jobs:
     name: "Detect changed modules"
     runs-on: ubuntu-latest
     outputs:
-      forecaster: ${{ steps.filter.outputs.forecaster }}
+      alert-job: ${{ steps.filter.outputs.alert-job }}
       web: ${{ steps.filter.outputs.web }}
     steps:
 
@@ -58,20 +58,20 @@ jobs:
             - 'shared/**'
             - 'go.work'
             - 'go.work.sum'
-          forecaster:
+          alert-job:
             - *shared
-            - 'forecaster/**'
+            - 'alert-job/**'
           web:
             - *shared
             - 'web/**'
 
-  forecaster:
-    name: "Deploy forecaster"
+  alert-job:
+    name: "Deploy alert-job"
     needs: [test, changes]
-    if: needs.changes.outputs.forecaster == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: needs.changes.outputs.alert-job == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master'
     uses: ./.github/workflows/_lambda-pipeline.yml
     with:
-      module-dir: forecaster
+      module-dir: alert-job
       image-name: wind-alert
       function-name: wind-alert
       role-arn: arn:aws:iam::513532022998:role/wind-alert

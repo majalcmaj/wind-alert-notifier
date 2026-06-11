@@ -1,4 +1,4 @@
-module github.com/majalcmaj/wind-alert/forecaster
+module github.com/majalcmaj/wind-alert/alert-job
 
 go 1.26
 

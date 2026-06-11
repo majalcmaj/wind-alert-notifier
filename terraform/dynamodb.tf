@@ -1,4 +1,4 @@
-# DynamoDB tables — shared by the forecaster (read-only) and web (CRUD) lambdas.
+# DynamoDB tables — shared by the alert-job (read-only) and web (CRUD) lambdas.
 
 resource "aws_dynamodb_table" "locations" {
   name         = "wind-alert-locations"

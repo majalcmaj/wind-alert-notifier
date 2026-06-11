@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       module-dir:
-        description: "forecaster or web"
+        description: "alert-job or web"
         required: true
         type: string
       image-name:
@@ -57,10 +57,10 @@ jobs:
       working-directory: web
       run: go build -tags lambda.norpc -o bin/wind-alert-web .
 
-    - name: Build and push forecaster image
-      if: inputs.module-dir == 'forecaster'
+    - name: Build and push alert-job image
+      if: inputs.module-dir == 'alert-job'
       run: |
-        docker buildx build --platform linux/amd64 --provenance=false -f forecaster/Dockerfile -t "$IMAGE_TAG" .
+        docker buildx build --platform linux/amd64 --provenance=false -f alert-job/Dockerfile -t "$IMAGE_TAG" .
         docker push "$IMAGE_TAG"
 
     - name: Build and push web image

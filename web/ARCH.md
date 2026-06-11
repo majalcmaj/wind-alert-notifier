@@ -1,6 +1,6 @@
 # Wind Alert Web — Architecture
 
-Admin frontend + config CRUD backend for [`../forecaster`](../forecaster). Lets an operator
+Admin frontend + config CRUD backend for [`../alert-job`](../alert-job). Lets an operator
 manage **locations** and **alert rules** stored in the shared DynamoDB tables.
 Scope: configuration only. Alert/forecast data hosting is future work, not covered here.
 
@@ -18,10 +18,10 @@ Lambda Function URL  ──►  wind-alert-web Lambda (Go, Docker, single functi
                           └─ wind-alert-rules
                                     ▲
                                     │  Scan / Query (read-only)
-                          ../forecaster Lambda (forecast evaluator, separate function)
+                          ../alert-job Lambda (forecast evaluator, separate function)
 ```
 
-Two independent Lambdas share the two tables. `../forecaster` reads config and sends alerts;
+Two independent Lambdas share the two tables. `../alert-job` reads config and sends alerts;
 `wind-alert-web` is the **only writer**. Both lambdas are deployed from this monorepo and share
 the `Location`/`Rule`/`Range` schema and DynamoDB access code via the `../shared` Go module —
 the tables themselves are provisioned once in `../terraform`, not owned by either lambda.
@@ -53,7 +53,7 @@ plain `net/http` — testable with `httptest` without any AWS in the loop.
 ### 2.3 Data access layer
 DynamoDB CRUD lives in the shared `../shared/dynamo` package (`dynamo.Store`): `PutLocation`,
 `DeleteLocation`, `PutRule`, `DeleteRule`, `DeleteRulesForLocation`, plus the `LoadLocations` /
-`LoadRulesForLocation` read patterns also used by `../forecaster`. Uses `aws-sdk-go-v2` +
+`LoadRulesForLocation` read patterns also used by `../alert-job`. Uses `aws-sdk-go-v2` +
 `feature/dynamodb/attributevalue` and `expression`. `main.go` constructs one `dynamo.Store` via
 `dynamo.New(ctx)` and passes it to the server as the `Datastore`.
 
@@ -110,16 +110,16 @@ so no `_method` override is needed.
 
 ## 5. Infrastructure (Terraform, `../terraform`)
 
-Provisioned alongside `../forecaster` in the shared Terraform stack (`web.tf`):
+Provisioned alongside `../alert-job` in the shared Terraform stack (`web.tf`):
 
 - A **Function URL**: `authorization_type = "NONE"` (basic-auth enforced in-app).
 - A **DynamoDB IAM policy** scoped to the two table ARNs, actions:
   `Scan, Query, PutItem, UpdateItem, DeleteItem, BatchWriteItem`. The tables themselves are
-  defined once in `dynamodb.tf`, shared with `../forecaster`.
+  defined once in `dynamodb.tf`, shared with `../alert-job`.
 - Env vars: `ADMIN_USER`, `ADMIN_PASSWORD` (sensitive Terraform variables).
 - `Timeout` ~10s, `MemorySize` 256 MB (DynamoDB round-trips + template render).
 - Region/stack: `eu-central-1`. Own ECR repo `wind-alert-web`; GH Actions builds/pushes/deploys
-  this lambda independently of `../forecaster`.
+  this lambda independently of `../alert-job`.
 
 ## 6. Project layout (target)
 
