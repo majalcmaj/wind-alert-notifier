@@ -1,0 +1,40 @@
+{{define "rule_form"}}
+<form
+  {{- if .IsEdit}} hx-put="/locations/{{.LocationID}}/rules/{{.OldName}}" hx-target="#rules-list-wrapper-{{.LocationID}}" hx-swap="outerHTML"
+  {{- else}} hx-post="/locations/{{.LocationID}}/rules" hx-target="#rules-list-wrapper-{{.LocationID}}" hx-swap="outerHTML"{{end}}>
+  {{if .Error}}<p style="color:var(--pico-color-red-550)">{{.Error}}</p>{{end}}
+  <fieldset style="display:grid;gap:0.5rem;padding:1rem">
+    <label>Name
+      <input type="text" name="name" value="{{.Rule.Name}}" required>
+    </label>
+    <small>Angle and hour ranges may wrap (from &gt; to means the range crosses 360&deg; / midnight).</small>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+      <label>Angle from (&deg;)
+        <input type="number" name="angle_from" value="{{fmtFloat .Rule.AngleRange.From}}" step="any" min="0" max="360" required>
+      </label>
+      <label>Angle to (&deg;)
+        <input type="number" name="angle_to" value="{{fmtFloat .Rule.AngleRange.To}}" step="any" min="0" max="360" required>
+      </label>
+      <label>Speed from (m/s)
+        <input type="number" name="speed_from" value="{{fmtFloat .Rule.SpeedRange.From}}" step="any" min="0" required>
+      </label>
+      <label>Speed to (m/s)
+        <input type="number" name="speed_to" value="{{fmtFloat .Rule.SpeedRange.To}}" step="any" min="0" required>
+      </label>
+      <label>Hour from
+        <input type="number" name="hour_from" value="{{fmtFloat .Rule.HourRange.From}}" step="any" min="0" max="24" required>
+      </label>
+      <label>Hour to
+        <input type="number" name="hour_to" value="{{fmtFloat .Rule.HourRange.To}}" step="any" min="0" max="24" required>
+      </label>
+    </div>
+    <label>Min confidence (0&ndash;1)
+      <input type="number" name="min_confidence" value="{{fmtFloat .Rule.MinConfidence}}" step="any" min="0" max="1" required>
+    </label>
+    <div>
+      <button type="submit">{{if .IsEdit}}Update{{else}}Create{{end}}</button>
+      <button type="button" onclick="this.closest('form').parentElement.innerHTML=''">Cancel</button>
+    </div>
+  </fieldset>
+</form>
+{{end}}

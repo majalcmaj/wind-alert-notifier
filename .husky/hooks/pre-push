@@ -1,6 +1,5 @@
 #!/bin/sh
 set -euxo pipefail
 
-make lint
-make build
-make test
+go vet ./shared/... ./forecaster/... ./web/...
+go test ./shared/... ./forecaster/... ./web/...

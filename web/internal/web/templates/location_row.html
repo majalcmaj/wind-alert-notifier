@@ -1,0 +1,16 @@
+{{define "location_row"}}
+<tr id="location-{{.ID}}">
+  <td>{{.ID}}</td>
+  <td>{{.Name}}</td>
+  <td>{{fmtFloat .Lat}}</td>
+  <td>{{fmtFloat .Lon}}</td>
+  <td>
+    <button hx-get="/locations/{{.ID}}/edit" hx-target="#location-form" hx-swap="innerHTML">Edit</button>
+    <button hx-delete="/locations/{{.ID}}" hx-target="#location-{{.ID}}" hx-swap="outerHTML" hx-confirm="Delete {{.Name}} and all its rules?">Delete</button>
+    <button hx-get="/locations/{{.ID}}/rules" hx-target="#rules-panel-{{.ID}}" hx-swap="innerHTML">Rules</button>
+  </td>
+</tr>
+<tr>
+  <td colspan="5"><div id="rules-panel-{{.ID}}"></div></td>
+</tr>
+{{end}}

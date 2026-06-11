@@ -1,0 +1,17 @@
+{{define "rules_list"}}
+<div id="rules-list-wrapper-{{.LocationID}}">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+    <h4>Rules</h4>
+    <button hx-get="/locations/{{.LocationID}}/rules/new" hx-target="#rule-form-{{.LocationID}}" hx-swap="innerHTML">New rule</button>
+  </div>
+  <div id="rule-form-{{.LocationID}}"></div>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Angle</th><th>Speed</th><th>Hour</th><th>Min conf.</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .Rules}}{{template "rule_row" .}}{{else}}<tr><td colspan="6">No rules yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}

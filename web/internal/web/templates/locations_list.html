@@ -1,0 +1,19 @@
+{{define "locations_list"}}
+<div id="locations-list-wrapper">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+    <h2>Locations</h2>
+    <button hx-get="/locations/new" hx-target="#location-form" hx-swap="innerHTML">New location</button>
+  </div>
+  <div id="location-form"></div>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Name</th><th>Lat</th><th>Lon</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .}}{{template "location_row" .}}{{else}}<tr><td colspan="5">No locations yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+
+{{define "content"}}{{template "locations_list" .}}{{end}}

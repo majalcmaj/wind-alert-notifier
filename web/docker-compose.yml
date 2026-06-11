@@ -1,0 +1,41 @@
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: -jar DynamoDBLocal.jar -inMemory -sharedDb
+    ports:
+      - "9081:8000"
+
+  setup:
+    image: amazon/aws-cli
+    depends_on:
+      - dynamodb-local
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: eu-central-1
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/bash", "/scripts/create-tables.sh"]
+
+  app:
+    image: wind-alert:latest
+    entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
+    ports:
+      - "9080:8080"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+
+  rie-proxy:
+    image: wind-alert-rie-proxy:latest
+    depends_on:
+      - app
+    environment:
+      LAMBDA_RIE_URL: http://app:8080/2015-03-31/functions/function/invocations
+    ports:
+      - "8080:8080"

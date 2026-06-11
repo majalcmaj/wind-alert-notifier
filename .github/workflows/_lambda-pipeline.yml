@@ -1,0 +1,79 @@
+name: Lambda pipeline
+
+on:
+  workflow_call:
+    inputs:
+      module-dir:
+        description: "forecaster or web"
+        required: true
+        type: string
+      image-name:
+        description: "ECR repository name"
+        required: true
+        type: string
+      function-name:
+        description: "Lambda function name"
+        required: true
+        type: string
+      role-arn:
+        description: "Lambda execution role ARN"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    name: "Build, push and deploy"
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: 513532022998.dkr.ecr.eu-central-1.amazonaws.com/${{ inputs.image-name }}:latest
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        aws-region: eu-central-1
+        role-to-assume: arn:aws:iam::513532022998:role/gh-actions-role
+        role-session-name: gh-actions-session
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Setup Go
+      if: inputs.module-dir == 'web'
+      uses: actions/setup-go@v6
+      with:
+        go-version: "1.26"
+        cache: true
+
+    - name: Build web binary
+      if: inputs.module-dir == 'web'
+      working-directory: web
+      run: go build -tags lambda.norpc -o bin/wind-alert-web .
+
+    - name: Build and push forecaster image
+      if: inputs.module-dir == 'forecaster'
+      run: |
+        docker buildx build --platform linux/amd64 --provenance=false -f forecaster/Dockerfile -t "$IMAGE_TAG" .
+        docker push "$IMAGE_TAG"
+
+    - name: Build and push web image
+      if: inputs.module-dir == 'web'
+      working-directory: web
+      run: |
+        docker buildx build --platform linux/amd64 --provenance=false -t "$IMAGE_TAG" .
+        docker push "$IMAGE_TAG"
+
+    - name: Deploy Lambda function with container image
+      uses: aws-actions/aws-lambda-deploy@v1.1.0
+      with:
+        function-name: ${{ inputs.function-name }}
+        package-type: Image
+        image-uri: ${{ env.IMAGE_TAG }}
+        role: ${{ inputs.role-arn }}

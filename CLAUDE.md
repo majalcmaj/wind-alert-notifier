@@ -1,50 +1,50 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this
+repository.
+
+## Structure
+
+This is a Go workspace (`go.work`) with three modules:
+
+- `shared/` — `github.com/majalcmaj/wind-alert/shared`: `model` (Location/Rule/Range types) and
+  `dynamo` (DynamoDB access layer) used by both lambdas.
+- `forecaster/` — `github.com/majalcmaj/wind-alert/forecaster`: the alerting Lambda. See
+  `forecaster/CLAUDE.md` for its commands and architecture.
+- `web/` — `github.com/majalcmaj/wind-alert/web`: the admin UI Lambda. See `web/ARCH.md` for its
+  architecture.
+
+`forecaster` and `web` each `replace github.com/majalcmaj/wind-alert/shared => ../shared` in
+their `go.mod` so the workspace module resolves locally without a remote module.
 
 ## Commands
 
+There is no `go.mod` at the repo root, so `./...` does not work from here — always pass explicit
+module paths:
+
 ```bash
-make test              # run all tests
-make test-coverage     # tests + open HTML coverage report
-make build             # compile with -tags lambda.norpc → bin/
-make lint              # golangci-lint v2 (downloads if absent)
-make lint-fix          # golangci-lint --fix
-make generate          # compile mail_template.mjml → mail_template.html (requires npx)
-make build-docker      # build linux/amd64 Docker image
-make run-docker        # run locally via Lambda RIE on :9000
-make run-test-request  # POST {} to local Lambda RIE
+go build ./shared/... ./forecaster/... ./web/...
+go vet   ./shared/... ./forecaster/... ./web/...
+go test  ./shared/... ./forecaster/... ./web/...
 ```
 
-Single test: `go test -v -run TestName ./internal/`
+The pre-push hook (`.husky/hooks/pre-push`) runs `go vet` and `go test` with these patterns.
 
-Pre-push hook runs the test suite — failing tests block push.
+Module-specific build/lint/Docker commands (`make build`, `make lint`, `make build-docker`, ...)
+live in each module's own `Makefile` — run them from within `forecaster/` or `web/`.
 
-## Architecture
+## Infrastructure & CI
 
-AWS Lambda function (Docker/ECR deployment) that fetches wind forecasts and emails them via SES.
+- `terraform/` provisions both lambdas (ECR, IAM, Lambda function) and the shared DynamoDB
+  tables (`wind-alert-locations`, `wind-alert-rules`) in one Terraform state.
+- `.github/workflows/ci.yml` runs the full test suite on every push/PR, then deploys
+  `forecaster` and/or `web` via the reusable `_lambda-pipeline.yml` workflow — only the lambda
+  whose files changed (or both, if `shared/**`, `go.work`, or `go.work.sum` changed) gets
+  redeployed, via `dorny/paths-filter`.
+- `.github/workflows/terraform.yml` plans/applies `terraform/**` changes separately.
 
-**Flow:**
-1. `main.go` handler fetches forecast from OpenWeather One Call 3.0 API for hardcoded coordinates (54.646034, 18.512407 — Gdańsk/Sopot, Poland)
-2. Renders HTML mail with `internal.RenderMail`
-3. Sends via AWS SES v2 (hardcoded sender/recipient in `main.go`)
+## Conventions
 
-**`internal/` packages:**
-- `openweather.go` — HTTP client for OpenWeather; maps response into `WeatherReading` (hourly + daily `WindDataPoint` slices)
-- `rule_engine.go` — evaluates a `WindDataPoint` against `[]Rule`; each rule has `AngleRange`, `SpeedRange`, `HourRange`; angle/hour use cyclic range logic (`From > To` wraps around)
-- `mail_renderer.go` — executes `mail_template.html` (embedded via `//go:embed`) with a `windArrow` template func
-- `wind_arrow_renderer.go` — maps wind degree → Unicode directional arrow (8 directions, text variation selector `︎`)
-
-**Email template:**
-- Source: `internal/mail_template.mjml` — edit this, not the HTML
-- Generated: `internal/mail_template.html` — committed output, regenerate with `make generate`
-- Embedded at compile time; changing `.html` takes effect without any registration step
-
-**Deployment:**
-- `aws/template.yml` — SAM template; Lambda pulls image from ECR repository `wind-alert-docker-repository`
-- `terraform/` — infrastructure provisioning
-- `.github/workflows/deploy-docker.yml` — CI/CD pipeline
-
-## Environment
-
-Copy `.env.template` → `.env` and set `OPENWEATHER_TOKEN`. The `.env` file is used by `make run-docker`.
+- Cross-package struct literals (e.g. `model.Range{...}`, `model.Rule{...}`) must use keyed
+  fields — `go vet`'s composites check enforces this.
+- Standardize on Go 1.26 across all three modules.

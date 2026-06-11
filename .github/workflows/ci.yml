@@ -1,0 +1,90 @@
+name: CI
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  test:
+    name: "Lint, build and test"
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: "1.26"
+        cache: true
+
+    - name: Vet
+      run: go vet ./shared/... ./forecaster/... ./web/...
+
+    - name: Test
+      run: go test ./shared/... ./forecaster/... ./web/...
+
+    - name: Lint forecaster
+      working-directory: forecaster
+      run: make lint
+
+    - name: Lint web
+      working-directory: web
+      run: make lint
+
+  changes:
+    name: "Detect changed modules"
+    runs-on: ubuntu-latest
+    outputs:
+      forecaster: ${{ steps.filter.outputs.forecaster }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+
+    - name: Checkout the code
+      uses: actions/checkout@v6
+
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          shared: &shared
+            - 'shared/**'
+            - 'go.work'
+            - 'go.work.sum'
+          forecaster:
+            - *shared
+            - 'forecaster/**'
+          web:
+            - *shared
+            - 'web/**'
+
+  forecaster:
+    name: "Deploy forecaster"
+    needs: [test, changes]
+    if: needs.changes.outputs.forecaster == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/_lambda-pipeline.yml
+    with:
+      module-dir: forecaster
+      image-name: wind-alert
+      function-name: wind-alert
+      role-arn: arn:aws:iam::513532022998:role/wind-alert
+    secrets: inherit
+
+  web:
+    name: "Deploy web"
+    needs: [test, changes]
+    if: needs.changes.outputs.web == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/_lambda-pipeline.yml
+    with:
+      module-dir: web
+      image-name: wind-alert-web
+      function-name: wind-alert-web
+      role-arn: arn:aws:iam::513532022998:role/wind-alert-web
+    secrets: inherit

@@ -1,5 +1,6 @@
 bin/
 test-coverage.out
+.docker-built
 .env
 terraform/terraform.tfvars
 terraform/.terraform/

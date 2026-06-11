@@ -1,0 +1,3 @@
+FROM gcr.io/distroless/static-debian12
+COPY bin/rie-proxy /rie-proxy
+ENTRYPOINT [ "/rie-proxy" ]

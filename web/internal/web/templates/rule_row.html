@@ -1,0 +1,13 @@
+{{define "rule_row"}}
+<tr id="rule-{{.LocationID}}-{{.Name}}">
+  <td>{{.Name}}</td>
+  <td>{{fmtFloat .AngleRange.From}}&ndash;{{fmtFloat .AngleRange.To}}</td>
+  <td>{{fmtFloat .SpeedRange.From}}&ndash;{{fmtFloat .SpeedRange.To}}</td>
+  <td>{{fmtFloat .HourRange.From}}&ndash;{{fmtFloat .HourRange.To}}</td>
+  <td>{{fmtFloat .MinConfidence}}</td>
+  <td>
+    <button hx-get="/locations/{{.LocationID}}/rules/{{.Name}}/edit" hx-target="#rule-form-{{.LocationID}}" hx-swap="innerHTML">Edit</button>
+    <button hx-delete="/locations/{{.LocationID}}/rules/{{.Name}}" hx-target="#rules-list-wrapper-{{.LocationID}}" hx-swap="outerHTML" hx-confirm="Delete rule {{.Name}}?">Delete</button>
+  </td>
+</tr>
+{{end}}

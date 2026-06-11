@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wind Alert</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <script src="/static/htmx.min.js"></script>
+  <script>
+    htmx.config.responseHandling = [
+      {code:"204", swap: false},
+      {code:"422", swap: true},
+      {code:"[23]..", swap: true},
+      {code:"[45]..", swap: false, error: true}
+    ];
+  </script>
+</head>
+<body>
+  <main class="container">
+    {{block "content" .}}{{end}}
+  </main>
+</body>
+</html>

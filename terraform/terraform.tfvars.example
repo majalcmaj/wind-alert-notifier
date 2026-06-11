@@ -1,2 +1,4 @@
 openweather_token = "your-openweather-api-token-here"
 icm_meteo_token   = "your-icm-meteo-api-token-here"
+admin_user        = "your-admin-username-here"
+admin_password    = "your-admin-password-here"

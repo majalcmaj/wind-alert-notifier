@@ -1,0 +1,25 @@
+{{define "location_form"}}
+<form
+  {{- if .IsEdit}} hx-put="/locations/{{.Location.ID}}" hx-target="#location-{{.Location.ID}}" hx-swap="outerHTML"
+  {{- else}} hx-post="/locations" hx-target="#locations-list-wrapper" hx-swap="outerHTML"{{end}}>
+  {{if .Error}}<p style="color:var(--pico-color-red-550)">{{.Error}}</p>{{end}}
+  <fieldset style="display:grid;gap:0.5rem;padding:1rem">
+    <label>ID
+      <input type="text" name="id" value="{{.Location.ID}}"{{if .IsEdit}} readonly aria-readonly="true"{{end}} required>
+    </label>
+    <label>Name
+      <input type="text" name="name" value="{{.Location.Name}}" required>
+    </label>
+    <label>Latitude
+      <input type="number" name="lat" value="{{fmtFloat .Location.Lat}}" step="any" min="-90" max="90" required>
+    </label>
+    <label>Longitude
+      <input type="number" name="lon" value="{{fmtFloat .Location.Lon}}" step="any" min="-180" max="180" required>
+    </label>
+    <div>
+      <button type="submit">{{if .IsEdit}}Update{{else}}Create{{end}}</button>
+      <button type="button" onclick="this.closest('form').parentElement.innerHTML=''">Cancel</button>
+    </div>
+  </fieldset>
+</form>
+{{end}}

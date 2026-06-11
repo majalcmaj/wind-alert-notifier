@@ -50,7 +50,10 @@
         "ecr:UntagResource",
         "ecr:ListTagsForResource"
       ],
-      "Resource": "arn:aws:ecr:eu-central-1:513532022998:repository/wind-alert"
+      "Resource": [
+        "arn:aws:ecr:eu-central-1:513532022998:repository/wind-alert",
+        "arn:aws:ecr:eu-central-1:513532022998:repository/wind-alert-web"
+      ]
     },
     {
       "Sid": "LambdaFunction",
@@ -69,7 +72,21 @@
         "lambda:UntagResource",
         "lambda:ListTags"
       ],
-      "Resource": "arn:aws:lambda:eu-central-1:513532022998:function:wind-alert"
+      "Resource": [
+        "arn:aws:lambda:eu-central-1:513532022998:function:wind-alert",
+        "arn:aws:lambda:eu-central-1:513532022998:function:wind-alert-web"
+      ]
+    },
+    {
+      "Sid": "LambdaFunctionUrl",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:UpdateFunctionUrlConfig",
+        "lambda:DeleteFunctionUrlConfig"
+      ],
+      "Resource": "arn:aws:lambda:eu-central-1:513532022998:function:wind-alert-web"
     },
     {
       "Sid": "IamRole",
@@ -92,7 +109,10 @@
         "iam:DetachRolePolicy",
         "iam:ListAttachedRolePolicies"
       ],
-      "Resource": "arn:aws:iam::513532022998:role/wind-alert"
+      "Resource": [
+        "arn:aws:iam::513532022998:role/wind-alert",
+        "arn:aws:iam::513532022998:role/wind-alert-web"
+      ]
     }
   ]
 }
