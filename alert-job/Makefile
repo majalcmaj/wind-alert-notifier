@@ -37,16 +37,6 @@ lint-fix:
 
 build-docker: .docker-built
 
-ensure-dynamo:
-	@docker network inspect wind-alert-net >/dev/null 2>&1 || $(MAKE) -C .. up-dynamo
-
-run-local: .docker-built ensure-dynamo
-	$(CHECK_DOCKER)
-	docker compose up
-
-stop-local:
-	docker compose down
-
 run-test-request:
 	curl "http://localhost:9090/2015-03-31/functions/function/invocations" -d '{}'
 
