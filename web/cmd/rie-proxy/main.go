@@ -24,7 +24,7 @@ import (
 func main() {
 	target := os.Getenv("LAMBDA_RIE_URL")
 	if target == "" {
-		target = "http://app:8080/2015-03-31/functions/function/invocations"
+		target = "http://web:8080/2015-03-31/functions/function/invocations"
 	}
 	addr := os.Getenv("ADDR")
 	if addr == "" {

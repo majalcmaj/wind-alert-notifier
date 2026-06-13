@@ -26,6 +26,6 @@ services:
     depends_on:
       - web
     environment:
-      LAMBDA_RIE_URL: http://app:8080/2015-03-31/functions/function/invocations
+      LAMBDA_RIE_URL: http://web:8080/2015-03-31/functions/function/invocations
     ports:
       - "8080:8080"

@@ -28,13 +28,13 @@ lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
 
 bin/.docker-image-id: bin/wind-alert-web Dockerfile
-	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert:latest --iidfile $@ .
+	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert:latest --iidfile $@ -f Dockerfile ..
 
 bin/rie-proxy: $(GO_SRCS)
 	CGO_ENABLED=0 go build -o bin/rie-proxy ./cmd/rie-proxy
 
 bin/.rie-proxy-image-id: bin/rie-proxy Dockerfile.rie-proxy
-	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ .
+	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ ..
 
 .PHONY: build-docker
 build-docker: bin/.docker-image-id bin/.rie-proxy-image-id
