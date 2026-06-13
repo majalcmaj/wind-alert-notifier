@@ -1,3 +1,12 @@
+FROM golang:1.26 AS build
+WORKDIR /build
+
+RUN --mount=type=bind,source=.,target=src,ro \
+    --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd src/web && CGO_ENABLED=0 go build -o bin/rie-proxy ./cmd/rie-proxy
+
+# Copy artifacts to a clean image
 FROM gcr.io/distroless/static-debian12
-COPY bin/rie-proxy /rie-proxy
-ENTRYPOINT [ "/rie-proxy" ]
+COPY --from=build /build/rie-proxy ./rie-proxy
+ENTRYPOINT [ "./rie-proxy" ]

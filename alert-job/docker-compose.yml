@@ -7,7 +7,7 @@ services:
     extends:
       file: ../shared/dynamo.yml
       service: dynamo-setup
-  wind-alert:
+  alert-job:
     build:
       context: ..
       dockerfile: alert-job/Dockerfile
