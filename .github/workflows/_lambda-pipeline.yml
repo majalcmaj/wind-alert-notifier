@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       module-dir:
-        description: "alert-job or web"
+        description: "lambda dir to deploy"
         required: true
         type: string
       image-name:
