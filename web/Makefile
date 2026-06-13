@@ -27,6 +27,7 @@ lint:
 lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
 
+# Todo: decide on those - do here/leave to the compose?
 bin/.docker-image-id: bin/wind-alert-web Dockerfile
 	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert:latest --iidfile $@ -f Dockerfile ..
 
@@ -35,21 +36,3 @@ bin/rie-proxy: $(GO_SRCS)
 
 bin/.rie-proxy-image-id: bin/rie-proxy Dockerfile.rie-proxy
 	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ ..
-
-.PHONY: build-docker
-build-docker: bin/.docker-image-id bin/.rie-proxy-image-id
-
-.PHONY: ensure-dynamo
-ensure-dynamo:
-	@docker network inspect wind-alert-net >/dev/null 2>&1 || $(MAKE) -C .. up-dynamo
-
-.PHONY: run-docker
-run-docker: build-docker ensure-dynamo
-	docker compose up
-
-run-test-request:
-	@USER=$$(grep ^ADMIN_USER .env | cut -d= -f2); \
-	 PASS=$$(grep ^ADMIN_PASSWORD .env | cut -d= -f2); \
-	 AUTH=$$(printf '%s:%s' "$$USER" "$$PASS" | base64); \
-	 curl -s "http://localhost:9080/2015-03-31/functions/function/invocations" \
-	   -d "{\"version\":\"2.0\",\"routeKey\":\"GET /\",\"rawPath\":\"/\",\"headers\":{\"authorization\":\"Basic $$AUTH\"},\"requestContext\":{\"http\":{\"method\":\"GET\",\"path\":\"/\"}},\"isBase64Encoded\":false}"
