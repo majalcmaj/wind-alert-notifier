@@ -1,11 +1,18 @@
-networks:
-  default:
-    external: true
-    name: wind-alert-net
-
 services:
+  dynamodb-local:
+    extends:
+      file: ../shared/dynamo.yml
+      service: dynamodb-local
+  dynamo-setup:
+    extends:
+      file: ../shared/dynamo.yml
+      service: dynamo-setup
   wind-alert:
-    image: wind-alert:latest
+    build:
+      context: ..
+      dockerfile: alert-job/Dockerfile
+    depends_on:
+      - dynamodb-local
     ports:
       - "9000:8080"
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
