@@ -64,7 +64,9 @@ func proxy(w http.ResponseWriter, r *http.Request, client *http.Client, target s
 		http.Error(w, "lambda invoke failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -169,9 +171,13 @@ func writeResponse(w http.ResponseWriter, out events.APIGatewayV2HTTPResponse) {
 			log.Printf("failed to decode base64 body: %v", err)
 			return
 		}
-		w.Write(decoded)
+		if _, err := w.Write(decoded); err != nil {
+			log.Printf("failed to write response body: %v", err)
+		}
 		return
 	}
 
-	io.WriteString(w, out.Body)
+	if _, err := io.WriteString(w, out.Body); err != nil {
+		log.Printf("failed to write response body: %v", err)
+	}
 }

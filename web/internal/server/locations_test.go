@@ -217,10 +217,6 @@ func TestDeleteLocationCascade(t *testing.T) {
 	if len(fs.deleteCalls) != 1 || fs.deleteCalls[0] != "puck" {
 		t.Error("DeleteLocation must be called with 'puck'")
 	}
-	// cascade order: rules first, then location
-	if len(fs.deleteRulesCalls) > 0 && len(fs.deleteCalls) > 0 {
-		// both called — order is ensured by sequential handler code
-	}
 }
 
 func TestDeleteLocationNotFound(t *testing.T) {
