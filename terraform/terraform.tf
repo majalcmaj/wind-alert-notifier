@@ -17,3 +17,12 @@ terraform {
   }
 }
 
+provider "aws" {
+  region = "eu-central-1"
+}
+
+locals {
+  account_id = "513532022998"
+  region     = "eu-central-1"
+  ecr_url  = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com"
+}

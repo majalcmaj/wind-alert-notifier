@@ -1,12 +1,3 @@
-provider "aws" {
-  region = "eu-central-1"
-}
-
-locals {
-  account_id = "513532022998"
-  region     = "eu-central-1"
-  ecr_image  = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/wind-alert:latest"
-}
 
 variable "openweather_token" {
   description = "OpenWeather API token"
@@ -18,16 +9,6 @@ variable "icm_meteo_token" {
   description = "ICM Meteo (api.meteo.pl) API token"
   type        = string
   sensitive   = true
-}
-
-# ECR
-
-resource "aws_ecr_repository" "wind_alert" {
-  name = "wind-alert"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
 }
 
 # IAM
@@ -87,7 +68,7 @@ resource "aws_lambda_function" "wind_alert" {
   function_name = "wind-alert"
   role          = aws_iam_role.wind_alert.arn
   package_type  = "Image"
-  image_uri     = local.ecr_image
+  image_uri     = "${local.ecr_url}/wind-alert:latest" 
   memory_size   = 128
   timeout       = 10
 

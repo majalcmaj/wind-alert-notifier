@@ -10,16 +10,6 @@ variable "admin_password" {
   sensitive   = true
 }
 
-# ECR
-
-resource "aws_ecr_repository" "wind_alert_web" {
-  name = "wind-alert-web"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
 # IAM
 
 resource "aws_iam_role" "wind_alert_web" {
@@ -70,7 +60,7 @@ resource "aws_lambda_function" "wind_alert_web" {
   function_name = "wind-alert-web"
   role          = aws_iam_role.wind_alert_web.arn
   package_type  = "Image"
-  image_uri     = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/wind-alert-web:latest"
+  image_uri     = "${local.ecr_url}/wind-alert-web:latest" 
   memory_size   = 256
   timeout       = 10
 
