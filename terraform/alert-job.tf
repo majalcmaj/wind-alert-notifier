@@ -11,6 +11,23 @@ variable "icm_meteo_token" {
   sensitive   = true
 }
 
+# ECR
+
+resource "aws_ecr_repository" "wind_alert" {
+  name = "wind-alert"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  force_delete = true
+}
+
+resource "aws_ecr_lifecycle_policy" "wind_alert" {
+  repository = aws_ecr_repository.wind_alert.name
+  policy     = local.ecr_lifecycle_policy
+}
+
 # IAM
 
 resource "aws_iam_role" "wind_alert" {
@@ -68,7 +85,7 @@ resource "aws_lambda_function" "wind_alert" {
   function_name = "wind-alert"
   role          = aws_iam_role.wind_alert.arn
   package_type  = "Image"
-  image_uri     = "${local.ecr_url}/wind-alert:latest" 
+  image_uri     = "${local.ecr_url}/wind-alert:latest"
   memory_size   = 128
   timeout       = 10
 
