@@ -89,6 +89,24 @@
       "Resource": "arn:aws:lambda:eu-central-1:513532022998:function:wind-alert-web"
     },
     {
+      "Sid": "EcrSeedImagePush",
+      "Effect": "Allow",
+      "Action": ["ecr:GetAuthorizationToken"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrSeedImageLayers",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage"
+      ],
+      "Resource": "arn:aws:ecr:eu-central-1:513532022998:repository/wind-alert-web"
+    },
+    {
       "Sid": "IamRole",
       "Effect": "Allow",
       "Action": [
