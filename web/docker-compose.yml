@@ -13,7 +13,7 @@ services:
       dockerfile: web/Dockerfile
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
     ports:
-      - "9080:8080"
+      - "9081:8080"
     env_file:
       - .env
     environment:
@@ -28,4 +28,4 @@ services:
     environment:
       LAMBDA_RIE_URL: http://web:8080/2015-03-31/functions/function/invocations
     ports:
-      - "8080:8080"
+      - "9080:8080"

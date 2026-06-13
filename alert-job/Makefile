@@ -48,7 +48,7 @@ stop-local:
 	docker compose down
 
 run-test-request:
-	curl "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{}'
+	curl "http://localhost:9090/2015-03-31/functions/function/invocations" -d '{}'
 
 invoke-lambda:
 	aws lambda invoke --region eu-central-1 --function-name wind-alert --cli-binary-format raw-in-base64-out --payload '{}' /tmp/wind-alert-invoke.json

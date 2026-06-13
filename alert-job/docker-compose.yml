@@ -14,7 +14,7 @@ services:
     depends_on:
       - dynamodb-local
     ports:
-      - "9000:8080"
+      - "9090:8080"
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
     env_file: .env
     environment:

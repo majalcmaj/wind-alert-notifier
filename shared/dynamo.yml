@@ -3,7 +3,7 @@ services:
     image: amazon/dynamodb-local:latest
     command: -jar DynamoDBLocal.jar -inMemory -sharedDb
     ports:
-      - "8010:8000"
+      - "9100:8000"
 
   dynamo-setup:
     image: amazon/aws-cli
