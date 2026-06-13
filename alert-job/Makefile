@@ -1,4 +1,4 @@
-docker-image = wind-alert:latest
+docker-image ?= wind-alert:latest
 GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
 GO_SOURCES = $(shell find . -name '*.go' -not -path './vendor/*')
 SHARED_SOURCES = $(shell find ../shared -name '*.go')

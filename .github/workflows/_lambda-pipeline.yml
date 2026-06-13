@@ -55,19 +55,18 @@ jobs:
     - name: Build web binary
       if: inputs.module-dir == 'web'
       working-directory: web
-      run: go build -tags lambda.norpc -o bin/wind-alert-web .
+      run: make build
 
     - name: Build and push alert-job image
       if: inputs.module-dir == 'alert-job'
       run: |
-        docker buildx build --platform linux/amd64 --provenance=false -f alert-job/Dockerfile -t "$IMAGE_TAG" .
+        make -C alert-job build-docker docker-image="$IMAGE_TAG"
         docker push "$IMAGE_TAG"
 
     - name: Build and push web image
       if: inputs.module-dir == 'web'
-      working-directory: web
       run: |
-        docker buildx build --platform linux/amd64 --provenance=false -t "$IMAGE_TAG" .
+        make -C web build-docker docker-image="$IMAGE_TAG"
         docker push "$IMAGE_TAG"
 
     - name: Deploy Lambda function with container image
