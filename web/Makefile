@@ -5,13 +5,14 @@ CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not r
 
 GO_SRCS := $(shell find . -name '*.go' -not -path '*/vendor/*')
 JS_SRCS := $(shell find . -name '*.js' -not -path '*/vendor/*' -not -path '*/node_modules/*')
+BIN_DIR ?= bin
 
-.PHONY: build build-docker clean test test-coverage fmt lint lint-fix
+.PHONY: build build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
 
-bin/wind-alert-web: $(GO_SRCS) $(JS_SRCS)
-	go build -tags lambda.norpc -o bin/wind-alert-web .
+$(BIN_DIR)/wind-alert-web: $(GO_SRCS) $(JS_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web .
 
-build: bin/wind-alert-web
+build: $(BIN_DIR)/wind-alert-web
 
 clean:
 	[ ! -d bin ] || rm -rf bin
@@ -31,14 +32,16 @@ lint:
 lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
 
-bin/.docker-image-id: bin/wind-alert-web Dockerfile
+bin/.docker-image-id: $(BIN_DIR)/wind-alert-web Dockerfile
 	$(CHECK_DOCKER)
 	docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ -f Dockerfile ..
 
 build-docker: bin/.docker-image-id
 
-bin/rie-proxy: $(GO_SRCS)
-	CGO_ENABLED=0 go build -o bin/rie-proxy ./cmd/rie-proxy
+$(BIN_DIR)/rie-proxy: $(GO_SRCS)
+	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./cmd/rie-proxy
 
-bin/.rie-proxy-image-id: bin/rie-proxy Dockerfile.rie-proxy
+build-rie-proxy: $(BIN_DIR)/rie-proxy
+
+bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy Dockerfile.rie-proxy
 	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ ..

@@ -4,7 +4,7 @@ WORKDIR /build
 RUN --mount=type=bind,source=.,target=src,ro \
     --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    cd src/alert-job && go build -tags lambda.norpc -o /build/ .
+    cd src/alert-job && make build BIN_DIR=/build
 
 # Copy artifacts to a clean image
 FROM public.ecr.aws/lambda/provided:al2023

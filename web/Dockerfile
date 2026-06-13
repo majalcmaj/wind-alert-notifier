@@ -4,9 +4,9 @@ WORKDIR /build
 RUN --mount=type=bind,source=.,target=src,ro \
     --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    cd src/web && go build -tags lambda.norpc -o /build/ .
+    cd src/web && make build BIN_DIR=/build
 
 # Copy artifacts to a clean image
 FROM public.ecr.aws/lambda/provided:al2023
-COPY --from=build /build/web ./main
+COPY --from=build /build/wind-alert-web ./main
 ENTRYPOINT [ "./main" ]

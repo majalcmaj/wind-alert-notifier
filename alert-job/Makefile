@@ -2,6 +2,7 @@ docker-image ?= wind-alert:latest
 GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
 GO_SOURCES = $(shell find . -name '*.go' -not -path './vendor/*')
 SHARED_SOURCES = $(shell find ../shared -name '*.go')
+BIN_DIR ?= bin
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
@@ -16,10 +17,10 @@ test:
 test-coverage:
 	go test -timeout=30s -cover -coverprofile test-coverage.out ./... && go tool cover -html=test-coverage.out
 
-bin/alert-job: $(GO_SOURCES) $(SHARED_SOURCES) go.mod go.sum
-	go build -tags lambda.norpc -o bin/ .
+$(BIN_DIR)/alert-job: $(GO_SOURCES) $(SHARED_SOURCES) go.mod go.sum
+	go build -tags lambda.norpc -o $(BIN_DIR)/alert-job .
 
-build: bin/alert-job
+build: $(BIN_DIR)/alert-job
 
 fmt:
 	go fmt ./...
