@@ -1,70 +1,66 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this
-repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Structure
 
-This is a Go workspace (`go.work`) with three modules:
+Go workspace (`go.work`), three modules:
 
-- `shared/` — `github.com/majalcmaj/wind-alert/shared`: `model` (Location/Rule/Range types) and
-  `dynamo` (DynamoDB access layer) used by both lambdas.
-- `alert-job/` — `github.com/majalcmaj/wind-alert/alert-job`: the alerting Lambda. See
-  `alert-job/CLAUDE.md` for its commands and architecture.
-- `web/` — `github.com/majalcmaj/wind-alert/web`: the admin UI Lambda. See `web/ARCH.md` for its
-  architecture.
+- `shared/` — `model` (Location/Rule/Range) + `dynamo` (DynamoDB Store); used by both lambdas
+- `alert-job/` — alerting Lambda; see `alert-job/CLAUDE.md`
+- `web/` — admin UI Lambda; see `web/ARCH.md`
 
-`alert-job` and `web` each `replace github.com/majalcmaj/wind-alert/shared => ../shared` in
-their `go.mod` so the workspace module resolves locally without a remote module.
+Both lambdas `replace github.com/majalcmaj/wind-alert/shared => ../shared` in `go.mod`.
 
 ## Commands
 
-There is no `go.mod` at the repo root, so `./...` does not work from here — always pass explicit
-module paths. The root `Makefile` wraps these:
+No `go.mod` at root — `./...` doesn't work. Use root `Makefile`:
 
 ```bash
-make build   # go build ./shared/... ./alert-job/... ./web/... + both lambda binaries
-make vet     # go vet   ./shared/... ./alert-job/... ./web/...
-make test    # go test  ./shared/... ./alert-job/... ./web/...
-make ci      # vet + test (what the pre-push hook and CI run)
+make build   # go build ./shared/... ./alert-job/... ./web/... + lambda binaries
+make vet     # go vet across all modules
+make test    # go test across all modules
+make ci      # vet + test (pre-push hook + CI)
 make lint    # golangci-lint for alert-job and web
-make fmt     # go fmt across all three modules
-make clean   # clean alert-job and web build artifacts
+make fmt     # go fmt across all modules
+make clean   # clean build artifacts
 ```
 
-The pre-push hook (`.husky/hooks/pre-push`) runs `make ci`.
+Single test (from module dir): `go test -v -run TestName ./internal/`
 
-Module-specific build/lint/Docker commands (`make build`, `make lint`, `make build-docker`, ...)
-live in each module's own `Makefile` — run them from within `alert-job/` or `web/`.
+Module-specific `make build/lint/build-docker`: run from `alert-job/` or `web/`.
+`alert-job/` has `make run-local`/`make run-docker` (auto-creates network + tables via `ensure-dynamo`). `web/` does not.
 
 ### Local stack
 
 ```bash
-make up    # build both lambda images, start shared DynamoDB Local + table setup, then both lambdas (detached)
-make down  # tear everything down
-make seed  # populate the shared local DynamoDB with sample data (scripts/seed-dynamodb.sh)
+make up    # build images, start DynamoDB Local + table setup, start both lambdas (detached)
+make down  # tear down
+make seed  # populate DynamoDB Local with sample data (scripts/seed-dynamodb.sh)
 ```
 
-`make up` runs a single `dynamodb-local` (root `docker-compose.yml`, host port 8010 → container
-8000) on the
-`wind-alert-net` Docker network. `alert-job/docker-compose.yml` and `web/docker-compose.yml`
-join that network as external, so both lambdas read/write the same
-`wind-alert-locations`/`wind-alert-rules` tables, mirroring production. Running a module's
-own `make run-local` / `make run-docker` standalone auto-creates the shared network and tables
-via `ensure-dynamo`.
+`make up` runs single `dynamodb-local` (host port 8010→8000) on `wind-alert-net`. Both module compose files join as external — both lambdas share `wind-alert-locations`/`wind-alert-rules`.
+
+## Web lambda
+
+Single lambdalith behind Lambda Function URL. Only writer to shared DynamoDB; `alert-job` read-only.
+
+- **Routing:** Go 1.22 `net/http.ServeMux` → `httpadapter` (API-GW payload 2.0). Plain `net/http` handlers, testable with `httptest`.
+- **Frontend:** Server-rendered HTML + htmx fragments. Templates + static (htmx, Pico.css) via `//go:embed`. No CDN, no build step.
+- **Auth:** Basic-auth middleware; `ADMIN_USER`/`ADMIN_PASSWORD` env vars. Function URL `authorization_type = "NONE"`.
+- **Packages:** `internal/server/` (router/handlers/middleware), `internal/validate/` (Location/Rule form validation), `internal/web/` (templates + static).
+- **Rule rename:** changing `name` rewrites DynamoDB SK — delete-old + put-new.
+- **Cyclic ranges:** `angle.from > angle.to` and `hour.from > hour.to` are valid (wrap); don't reject.
+
+See `web/ARCH.md` for route table + data model.
 
 ## Infrastructure & CI
 
-- `terraform/` provisions both lambdas (ECR, IAM, Lambda function) and the shared DynamoDB
-  tables (`wind-alert-locations`, `wind-alert-rules`) in one Terraform state.
-- `.github/workflows/ci.yml` runs the full test suite on every push/PR, then deploys
-  `alert-job` and/or `web` via the reusable `_lambda-pipeline.yml` workflow — only the lambda
-  whose files changed (or both, if `shared/**`, `go.work`, or `go.work.sum` changed) gets
-  redeployed, via `dorny/paths-filter`.
-- `.github/workflows/terraform.yml` plans/applies `terraform/**` changes separately.
+- `terraform/` — ECR, IAM, Lambda, DynamoDB tables in one state
+- `.github/workflows/ci.yml` — test + deploy; only changed lambda redeploys (`dorny/paths-filter`); shared/** changes trigger both
+- `.github/workflows/terraform.yml` — separate plan/apply for `terraform/**`
 
 ## Conventions
 
-- Cross-package struct literals (e.g. `model.Range{...}`, `model.Rule{...}`) must use keyed
-  fields — `go vet`'s composites check enforces this.
-- Standardize on Go 1.26 across all three modules.
+- Cross-package struct literals must use keyed fields (`go vet` composites check enforces this)
+- Go 1.26 across all three modules
