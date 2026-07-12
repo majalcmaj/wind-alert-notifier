@@ -1,0 +1,1098 @@
+<!doctype html>
+<!--
+  ============================================================================
+  Wind Alert — Forecast & History page: 3 UX concept mockups
+  ============================================================================
+
+  WHAT THIS IS
+    A static, self-contained design pitch for a new page in the `web/` lambda:
+    a page showing aggregated multi-provider wind forecasts PLUS historical
+    (observed) data. Three alternative frontends, rendered with FAKE data, so
+    a human can pick one direction. Open this file directly in a browser —
+    no server, no build step, no network access needed.
+
+    Related planning doc: docs/improvement-ideas.md (item numbers referenced
+    below, e.g. "#16" = alert history storage, "#19" = live observations).
+
+  WHAT THIS IS NOT
+    - Not production code. Do NOT copy this file into web/internal/web/ as-is.
+    - Not real data. Every number is generated in the <script> at the bottom
+      (deterministic pseudo-noise shaped like a sea-breeze day). When
+      implementing, all data comes server-side from DynamoDB / providers.
+    - Not the final visual design system. It uses a validated reference
+      palette (see PALETTE notes below); the real page should keep or
+      consciously replace it.
+
+  THE FOUR CONCEPTS (pick ONE to implement first)
+    A. "The Board"    — dense Windguru-style hourly table. Cheapest build:
+                        pure server-rendered HTML table + htmx day paging,
+                        zero chart JS. History = past days show an extra
+                        "observed" row.
+    B. "Sessions"     — phone-first cards that answer "when do I go?".
+                        Requires session-window rule logic first
+                        (improvement-ideas.md #2). History = season strip.
+    C. "The Explorer" — one continuous SVG timeline, observed past flowing
+                        into forecast envelope. Most JS (~300 lines vanilla
+                        SVG, no library). Shines only once forecast/observed
+                        history is stored (#16, #19).
+    D. "The Window"   — Windy-style: animated particle map (one moment) on
+                        top, Concept C's chart as a draggable scrubber below,
+                        married by one shared time cursor. Particle engine
+                        adapted from the sibling repo ../wind-range-widget
+                        (src/wind-particles.ts) — vendor it, don't rewrite:
+                        that repo's version is tested and handles resize via
+                        ResizeObserver. Differences here: config is driven by
+                        the scrub time (not a 7s sweep cycle), particles are
+                        colored/sized by speed, px-velocity scales with knots.
+                        Same storage needs as C. The map panel is DELIBERATELY
+                        always-dark (like an embedded map app) even in light
+                        theme. Coastline is a stylized decorative SVG — real
+                        page needs a vendored per-location silhouette (no CDN
+                        tiles allowed).
+
+  HARD CONSTRAINTS FOR THE REAL IMPLEMENTATION (from web/ARCH.md)
+    - No CDN, no external requests: all JS/CSS embedded via //go:embed and
+      served from /static/. This mockup honors that (everything inline).
+    - Server-rendered HTML + htmx fragments; keep JS minimal and vanilla.
+    - Any new static asset goes to web/internal/web/static/, templates to
+      web/internal/web/templates/.
+    - Existing stack uses Pico.css; this mockup deliberately does NOT — if a
+      concept is adopted, decide: extend Pico or scope this page's own CSS.
+    - Basic-auth protects all routes; the new page sits behind the same
+      middleware.
+
+  DATA THE REAL PAGE NEEDS (none of it exists yet — build order matters)
+    - Aggregated forecast per location: alert-job already fetches 4 providers
+      in memory (alert-job/internal/aggregator.go FetchAll) but PERSISTS
+      NOTHING. The page needs forecasts written to a table (or fetched live
+      by the web lambda — requires moving provider clients out of
+      alert-job/internal into shared/, see improvement-ideas.md #12).
+    - Observed data: needs a station/observation source (#19). Until it
+      exists, ship forecast-only and hide the "observed" rows/lines.
+    - Units: model stores m/s; surfers read knots (kn = m/s * 1.9438445).
+      Mockup shows knots — real page should show both or toggle (#4).
+
+  PALETTE / THEMING NOTES
+    - Colors follow a CVD-validated (colorblind-safe) reference palette.
+      Sequential blue ramp (--seq-100..700) encodes wind-speed magnitude —
+      deliberately NOT the Windguru rainbow (rainbow ramps are a dataviz
+      anti-pattern: not perceptually ordered, not CVD-safe).
+    - Theme tokens are defined on :root, overridden in
+      @media (prefers-color-scheme: dark), then AGAIN via
+      :root[data-theme="dark"] / :root[data-theme="light"] so an explicit
+      toggle beats the OS preference in both directions. Keep this pattern.
+    - Status colors (--good/--warning/--critical) are reserved for state
+      (go / marginal / offshore-danger) and never used as series colors.
+    - Inside colored table cells (Concept A) text color is tied to the ramp
+      step, not the theme — the ramp hexes are identical in both themes.
+
+  CAVEATS / KNOWN SHORTCUTS IN THIS MOCKUP
+    - Concept A "agreement" dots derive from provider min/max spread with
+      arbitrary thresholds (±3/5/8 kn) — tune against real data.
+    - Concept B session windows, kite-size hints, season-strip days: all
+      hardcoded in the HTML, not computed.
+    - Concept C minimap is a static picture; real one needs drag/brush
+      handling (pointerdown/move) and server round-trip (htmx) or clientside
+      data window.
+    - Direction arrows: meteorological convention — degrees say where wind
+      comes FROM; the arrow glyph "↑" is rotated by (deg + 180) % 360 so it
+      points where the wind blows TO. Easy to get backwards; there are tests
+      for the same convention in alert-job/internal/wind_arrow_renderer.go.
+    - Hover tooltip (Concept C) is mouse-only; real page needs a touch
+      fallback (tap = same handler) and should keep the table view (Concept
+      A-style) reachable for accessibility.
+    - No i18n, no timezone handling: hours are displayed as-is. Real page
+      must render in the location's timezone (improvement-ideas.md #1).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wind Alert — Forecast Page: 3 Concepts</title>
+<style>
+/* ---------------------------------------------------------------------------
+   THEME TOKENS
+   Single source of truth for every color below. Three definition layers:
+   1) :root                              — light defaults
+   2) @media (prefers-color-scheme:dark) — OS preference
+   3) :root[data-theme=...]             — explicit user toggle, wins over OS
+   Components must ONLY use var(--token), never raw hex (except the
+   ramp-step cell text described in the header comment).
+--------------------------------------------------------------------------- */
+:root {
+  --plane: #f9f9f7;      /* page background */
+  --surface: #fcfcfb;    /* card / chart background */
+  --ink: #0b0b0b;        /* primary text */
+  --ink-2: #52514e;      /* secondary text */
+  --muted: #898781;      /* axis labels, captions */
+  --grid: #e1e0d9;       /* hairline gridlines */
+  --baseline: #c3c2b7;   /* chart axes / day separators */
+  --ring: rgba(11,11,11,0.10);   /* hairline borders */
+  /* categorical series: fixed provider→color mapping. NEVER reassign when a
+     provider is toggled off — color follows the entity, not its position. */
+  --s1: #2a78d6; --s2: #1baf7a; --s3: #eda100; --s4: #008300;
+  /* sequential blue ramp: wind-speed magnitude (light = calm, dark = nuking).
+     Same hexes both themes — colored cells keep their own text color. */
+  --seq-100:#cde2fb; --seq-200:#9ec5f4; --seq-300:#6da7ec; --seq-400:#3987e5;
+  --seq-500:#256abf; --seq-600:#184f95; --seq-700:#0d366b;
+  /* status colors — reserved for go/marginal/danger states only */
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --good-text: #006300;  /* darker green: readable as TEXT on light surface */
+  --band-wash: rgba(42,120,214,0.10);  /* provider min–max envelope fill */
+  --rule-wash: rgba(137,135,129,0.13); /* rule threshold band (neutral gray —
+                                          must not look like a data series) */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --plane: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --ring: rgba(255,255,255,0.10);
+    /* dark categorical steps: same hues re-stepped for the dark surface */
+    --s1: #3987e5; --s2: #199e70; --s3: #c98500; --s4: #008300;
+    --good-text: #0ca30c;
+    --band-wash: rgba(57,135,229,0.16);
+    --rule-wash: rgba(137,135,129,0.18);
+  }
+}
+/* explicit toggle must override the media query in BOTH directions */
+:root[data-theme="dark"] {
+  --plane: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+  --muted: #898781; --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #199e70; --s3: #c98500; --s4: #008300;
+  --good-text: #0ca30c;
+  --band-wash: rgba(57,135,229,0.16); --rule-wash: rgba(137,135,129,0.18);
+}
+:root[data-theme="light"] {
+  --plane: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+  --muted: #898781; --grid: #e1e0d9; --baseline: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #1baf7a; --s3: #eda100; --s4: #008300;
+  --good-text: #006300;
+  --band-wash: rgba(42,120,214,0.10); --rule-wash: rgba(137,135,129,0.13);
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--plane);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 2.5rem 1.25rem 5rem;
+}
+.wrap { max-width: 68rem; margin: 0 auto; display: flex; flex-direction: column; gap: 4rem; }
+
+.intro h1 { font-size: 1.7rem; margin: 0 0 .4rem; letter-spacing: -0.015em; text-wrap: balance; }
+.intro p { color: var(--ink-2); max-width: 46rem; margin: 0; }
+
+.concept { display: flex; flex-direction: column; gap: 1rem; }
+.eyebrow {
+  font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted);
+}
+.concept h2 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+.concept .thesis { color: var(--ink-2); margin: 0; max-width: 46rem; }
+
+/* "browser frame" chrome around each mockup — pitch decoration only,
+   NOT part of any concept. Do not implement. */
+.frame {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.frame-bar {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .5rem .9rem;
+  border-bottom: 1px solid var(--ring);
+  font-size: .75rem; color: var(--muted);
+}
+.frame-bar .dots { display: flex; gap: 5px; }
+.frame-bar .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--grid); }
+/* overflow-x: wide mockups (Board table, Explorer chart) scroll inside the
+   frame; the page body itself must never scroll horizontally. */
+.frame-body { padding: 1.25rem; overflow-x: auto; }
+
+.verdict { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 2rem; font-size: .88rem; }
+.verdict div { color: var(--ink-2); }
+.verdict b { color: var(--ink); display: block; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: .15rem; }
+@media (max-width: 640px) { .verdict { grid-template-columns: 1fr; } }
+
+/* ---------- shared mock chrome ---------- */
+.mock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.mock-head h3 { margin: 0; font-size: 1.05rem; }
+.mock-head .sub { color: var(--muted); font-size: .8rem; }
+.pill-row { display: flex; gap: .4rem; flex-wrap: wrap; }
+.pill {
+  font-size: .75rem; padding: .18rem .6rem; border-radius: 999px;
+  border: 1px solid var(--ring); color: var(--ink-2); background: transparent; white-space: nowrap;
+}
+.pill.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* ---------------------------------------------------------------------------
+   CONCEPT A — "The Board"
+   Dense hourly grid. Monospace + tabular-nums so digit columns align.
+   Cell background = sequential ramp step by speed (see speedCell() in JS).
+   Implementation target: pure Go html/template — the whole table is
+   server-renderable, htmx swaps the table on day change. No chart JS at all.
+--------------------------------------------------------------------------- */
+.board { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .78rem; }
+.board table { border-collapse: separate; border-spacing: 2px 2px; } /* 2px gap
+  between colored cells = the dataviz "spacer" rule; don't collapse borders */
+.board th, .board td {
+  text-align: center; padding: .28rem .3rem; min-width: 2.45rem;
+  font-variant-numeric: tabular-nums; border-radius: 3px;
+}
+.board th { color: var(--muted); font-weight: 500; }
+.board .rowlab { text-align: right; color: var(--ink-2); padding-right: .7rem; white-space: nowrap; font-weight: 500; }
+.board td.blank { background: transparent; }
+.board .arrow { display: inline-block; font-size: .95rem; line-height: 1; }
+.board .agree { letter-spacing: .1em; }
+.board .obs-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: .75rem; margin-top: .6rem; }
+.daynav { display: flex; gap: .4rem; align-items: center; margin-bottom: .9rem; flex-wrap: wrap; }
+.daynav .pill.past { border-style: dashed; } /* dashed = past day (has observed data) */
+.legend-strip { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; font-size: .72rem; color: var(--muted); font-family: system-ui, sans-serif; }
+.legend-strip .cells { display: flex; }
+.legend-strip .cells i { width: 22px; height: 11px; display: block; }
+
+/* ---------------------------------------------------------------------------
+   CONCEPT B — "Sessions"
+   Phone-first cards (max-width 27rem even on desktop — that's the point).
+   Card = one session window computed by the rule engine (needs
+   improvement-ideas.md #2 min-consecutive-hours logic server-side).
+   Badges use status colors + icon + text — never color alone (CVD).
+--------------------------------------------------------------------------- */
+.sessions { display: flex; flex-direction: column; gap: 1rem; max-width: 27rem; margin: 0 auto; }
+.day-group h4 { margin: 0 0 .5rem; font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.card {
+  border: 1px solid var(--ring); border-radius: 12px; padding: .9rem 1rem;
+  display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; align-items: center;
+  background: var(--surface); position: relative;
+}
+.card .when { font-size: .82rem; color: var(--ink-2); }
+.card .headline { font-size: 1.28rem; font-weight: 700; letter-spacing: -0.01em; }
+.card .headline small { font-weight: 400; font-size: .8rem; color: var(--muted); }
+.card .meta { display: flex; gap: .55rem; align-items: center; font-size: .78rem; color: var(--ink-2); flex-wrap: wrap; }
+.badge {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .72rem; font-weight: 600; padding: .1rem .5rem; border-radius: 999px;
+}
+/* color-mix keeps badge washes theme-correct without extra tokens.
+   Baseline support (all evergreen browsers 2023+); if targeting older
+   browsers, precompute rgba() washes per theme instead. */
+.badge.go { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good-text); }
+.badge.iffy { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--ink); }
+.badge.danger { background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); }
+.conf { font-size: .74rem; color: var(--muted); }
+.conf b { color: var(--ink); }
+.spark { grid-row: 1 / span 3; align-self: center; }
+.season { margin-top: .5rem; }
+.season h4 { margin: 0 0 .5rem; font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.season .strip { display: grid; grid-template-columns: repeat(31, 1fr); gap: 3px; max-width: 24rem; }
+.season .strip i { aspect-ratio: 1; border-radius: 2.5px; background: var(--grid); }
+.season .strip i.win { background: var(--seq-400); } /* rideable day */
+.season .strip i.big { background: var(--seq-600); } /* >20 kn day — darker
+  step of the SAME hue: magnitude, not a new category */
+.season .cap { font-size: .75rem; color: var(--muted); margin-top: .45rem; }
+.season .cap b { color: var(--ink); }
+
+/* ---------------------------------------------------------------------------
+   CONCEPT C — "The Explorer"
+   One SVG timeline: observed past (solid ink) + forecast envelope (band =
+   provider min–max, line = median, dashed = gusts) + rule threshold band.
+   All geometry computed in JS from data arrays — never hand-author SVG
+   point lists. viewBox is fixed 920×300; width:100% scales it responsively
+   (hover math converts client px → viewBox px, see mousemove handler).
+--------------------------------------------------------------------------- */
+.explorer .chart-wrap { position: relative; }
+.explorer svg text { font-family: system-ui, sans-serif; }
+.chips { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: .38rem; font-size: .76rem;
+  border: 1px solid var(--ring); border-radius: 999px; padding: .16rem .6rem; color: var(--ink-2);
+}
+.chip i { width: 9px; height: 9px; border-radius: 50%; }
+.chip.off { opacity: .45; } /* toggled-off provider keeps its color slot */
+.tt {
+  position: absolute; pointer-events: none; display: none;
+  background: var(--surface); border: 1px solid var(--ring); border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  padding: .5rem .65rem; font-size: .74rem; min-width: 10.5rem; z-index: 2;
+}
+.tt table { border-collapse: collapse; width: 100%; }
+.tt td { padding: .05rem 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tt td:last-child { text-align: right; color: var(--ink); }
+.tt .tt-h { font-weight: 600; color: var(--ink); margin-bottom: .2rem; }
+.minimap { margin-top: .6rem; }
+.explorer .foot { display: flex; justify-content: space-between; gap: 1rem; font-size: .74rem; color: var(--muted); margin-top: .5rem; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------------------
+   CONCEPT D — "The Window" (Windy-style map + scrub timeline)
+   DELIBERATELY single-theme: the .windy panel is always dark regardless of
+   page theme — it reads as a window into weather (like an embedded map app),
+   not as page chrome. Its tokens are therefore local --w-* properties, NOT
+   the page theme tokens; do not "fix" this by wiring them to :root.
+   Palette lineage: ../wind-range-widget defaults (--bg #0c141e, accent
+   #00c8ff). Particle speed colors are a separate 5-step scale (see
+   speedColor() in JS) — magnitude encoding, exempt from the page's
+   categorical slots because it lives inside the always-dark panel.
+--------------------------------------------------------------------------- */
+.windy { --w-bg:#0c141e; --w-land:#182631; --w-shore:#2b4356; --w-accent:#00c8ff;
+  --w-text:#eaf6ff; --w-dim:rgba(234,246,255,.55); background:var(--w-bg); border-radius:0 0 9px 9px; }
+.windy .map { position:relative; height:330px; overflow:hidden;
+  background:linear-gradient(115deg,#0a1c2b 0%, #0c141e 55%, #091018 100%); }
+.windy .map svg.coast, .windy .map canvas { position:absolute; inset:0; width:100%; height:100%; }
+.windy .marker { position:absolute; left:24%; top:50%; }
+.windy .marker i { display:block; width:10px; height:10px; border-radius:50%;
+  background:var(--w-accent); box-shadow:0 0 0 4px rgba(0,200,255,.18), 0 0 14px rgba(0,200,255,.5); }
+.windy .marker span { position:absolute; left:14px; top:-4px; color:var(--w-dim); font-size:.72rem; letter-spacing:.08em; }
+/* readout = the "glanceable widget": everything a surfer needs at cursor time */
+.windy .readout { position:absolute; top:14px; left:14px; min-width:12rem;
+  background:rgba(8,14,22,.82); border:1px solid rgba(255,255,255,.09); border-radius:10px;
+  padding:.6rem .8rem .7rem; color:var(--w-text); }
+.windy .r-top { display:flex; justify-content:space-between; gap:.8rem; font-size:.74rem; color:var(--w-dim); font-variant-numeric:tabular-nums; }
+.windy .r-top .tag { text-transform:uppercase; letter-spacing:.1em; font-size:.62rem; font-weight:700; color:var(--w-accent); }
+.windy .r-big { font-size:1.9rem; font-weight:700; line-height:1.15; letter-spacing:-.01em; }
+.windy .r-big small { font-size:.85rem; font-weight:400; color:var(--w-dim); }
+.windy .r-big .arrow { display:inline-block; font-size:1.2rem; color:var(--w-accent); }
+.windy .r-meta { font-size:.76rem; color:var(--w-dim); font-variant-numeric:tabular-nums; }
+.windy .r-rule { margin-top:.35rem; font-size:.7rem; color:var(--w-accent); }
+.windy .maptag { position:absolute; right:12px; bottom:10px; font-size:.68rem; color:rgba(234,246,255,.35); }
+.windy .controls { display:flex; align-items:center; gap:.7rem; padding:.55rem .9rem;
+  border-top:1px solid rgba(255,255,255,.07); color:var(--w-dim); font-size:.74rem; flex-wrap:wrap; }
+.windy .play { width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.3);
+  background:transparent; color:var(--w-text); cursor:pointer; font-size:.85rem; line-height:1; }
+.windy .play:hover { border-color:var(--w-accent); color:var(--w-accent); }
+.windy .speedleg { display:flex; align-items:center; gap:.35rem; margin-left:auto; }
+.windy .speedleg i { width:16px; height:8px; border-radius:2px; display:block; }
+.windy .scrubwrap { padding:.15rem .9rem .8rem; }
+/* touch-action:none is REQUIRED for pointer-drag scrubbing on touch devices —
+   without it the browser steals the gesture for page scroll */
+.windy .scrubwrap svg { display:block; cursor:ew-resize; touch-action:none; }
+
+.pick { border-top: 1px solid var(--grid); padding-top: 1.5rem; color: var(--ink-2); font-size: .92rem; max-width: 46rem; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="intro">
+    <div class="eyebrow">Wind Alert · web extension pitch</div>
+    <h1>Forecast &amp; history page — four directions</h1>
+    <p>Same data underneath (4 providers, aggregated, plus what actually happened), four very
+    different ways to live with it. All fake-but-plausible data for Sopot. Pick the one we build.</p>
+  </header>
+
+  <!-- ============ CONCEPT A ============ -->
+  <section class="concept">
+    <div class="eyebrow">Concept A</div>
+    <h2>The Board — dense hourly grid</h2>
+    <p class="thesis">Windguru raised you; this respects that. One screen, every hour, every number.
+    History is just yesterday's column set — with the <em>observed</em> row underneath so you see
+    who lied. Reads like an instrument panel, not a website.</p>
+
+    <div class="frame">
+      <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span> wind-alert / forecast / sopot</div>
+      <div class="frame-body">
+        <div class="mock-head">
+          <h3>Sopot <span class="sub">54.646 N, 18.512 E · Europe/Warsaw</span></h3>
+          <div class="pill-row">
+            <span class="pill">m/s</span><span class="pill on">knots</span>
+          </div>
+        </div>
+        <!-- day pager: in the real page each pill is an hx-get that swaps
+             #board with the server-rendered table for that date -->
+        <div class="daynav">
+          <span class="pill past">‹ Thu 10</span>
+          <span class="pill past">Fri 11</span>
+          <span class="pill on">Today · Sat 12</span>
+          <span class="pill">Sun 13</span>
+          <span class="pill">Mon 14 ›</span>
+        </div>
+        <!-- table injected by buildBoard() below; real impl renders this
+             server-side with html/template — see CSS comment on .board -->
+        <div class="board" id="board"></div>
+        <div class="legend-strip">
+          <span>wind</span>
+          <span class="cells" id="board-legend"></span>
+          <span>0 → 35 kn · agreement ●●●○ = 3 of 4 providers within ±3 kn · rule hours framed</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div><b>Feels like</b> Windguru with taste. Zero learning curve for any surfer.</div>
+      <div><b>Strong at</b> scanning a whole day in two seconds; comparing days; the observed-vs-forecast row is brutal and honest.</div>
+      <div><b>Weak at</b> phones (it scrolls sideways — acceptable, but it's a desktop soul); telling you <em>when to go</em> — you still read it yourself.</div>
+      <div><b>Build cost</b> lowest. One templated table, htmx day-paging, no JS charting.</div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT B ============ -->
+  <section class="concept">
+    <div class="eyebrow">Concept B</div>
+    <h2>Sessions — the answer, not the data</h2>
+    <p class="thesis">Phone-first. The engine already knows your rules — so the page speaks in
+    <em>sessions</em>, not hours: when to go, how big, how sure. History becomes a season strip —
+    every day you could have ridden. The forecast table still exists, one tap deeper.</p>
+
+    <div class="frame">
+      <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span> wind-alert / sessions / sopot</div>
+      <div class="frame-body">
+        <div class="sessions">
+          <!-- Every card below is HARDCODED sample content. In the real page a
+               card = one session window from the rule engine: contiguous hours
+               where a rule matches (needs improvement-ideas.md #2). Fields:
+               window, speed range (+ gusts, #7), direction + shore relation
+               (#8), rule name, provider confidence. -->
+          <div class="day-group">
+            <h4>Today · Sat 12 Jul</h4>
+            <div class="card">
+              <div class="when">13:00 – 18:00 · 5 h window</div>
+              <div class="headline">18–24 kn <small>gusts 27</small></div>
+              <div class="meta">
+                <span>NW ↗ cross-onshore</span>
+                <span class="badge go">✓ Go — rule “Solid NW”</span>
+                <span class="conf"><b>4/4</b> providers agree</span>
+              </div>
+              <svg class="spark" data-spark="10,11,13,17,20,22,23,22,19,14,11" width="86" height="44" aria-hidden="true"></svg>
+            </div>
+          </div>
+          <div class="day-group">
+            <h4>Tomorrow · Sun 13 Jul</h4>
+            <div class="card">
+              <div class="when">08:00 – 11:00 · 3 h window</div>
+              <div class="headline">12–15 kn <small>gusts 19</small></div>
+              <div class="meta">
+                <span>W → cross-shore</span>
+                <span class="badge iffy">~ Marginal — big kite day</span>
+                <span class="conf"><b>2/4</b> providers agree</span>
+              </div>
+              <svg class="spark" data-spark="14,15,13,12,11,9,7,6,5,5,4" width="86" height="44" aria-hidden="true"></svg>
+            </div>
+            <!-- offshore danger card: --critical badge. Never suppress these
+                 sessions — show them WITH the warning (safety, see #8/#11) -->
+            <div class="card" style="margin-top:.6rem">
+              <div class="when">15:00 – 17:00</div>
+              <div class="headline">20–26 kn <small>gusts 34</small></div>
+              <div class="meta">
+                <span>SE ↘ offshore</span>
+                <span class="badge danger">⚠ Offshore — not alone</span>
+                <span class="conf"><b>3/4</b> providers agree</span>
+              </div>
+              <svg class="spark" data-spark="4,5,8,13,19,24,26,22,15,9,6" width="86" height="44" aria-hidden="true"></svg>
+            </div>
+          </div>
+          <div class="season">
+            <h4>Season · last 60 days</h4>
+            <!-- GitHub-contribution-style strip: one cell per day, blue ramp =
+                 rideable / big day. Needs alert history storage (#16). -->
+            <div class="strip" id="season-strip"></div>
+            <div class="strip" id="season-strip2" style="margin-top:3px"></div>
+            <div class="cap"><b>17 rideable days</b> since mid-May · best: 27 Jun, 28 kn NW all afternoon · forecast called it 2 days out</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div><b>Feels like</b> a knowledgeable friend texting you. The only concept that works one-handed on a beach parking lot.</div>
+      <div><b>Strong at</b> the actual decision (“go at 13:00, take the 9 m²”); making the rule engine visible and trustworthy; safety badges (offshore) impossible to miss.</div>
+      <div><b>Weak at</b> free exploration — if the rules are badly tuned, the page is only as smart as they are; power users will want the raw numbers anyway.</div>
+      <div><b>Build cost</b> medium. Needs the session-window logic (improvement #2) done first; cards + strip are simple templates after that.</div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT C ============ -->
+  <section class="concept">
+    <div class="eyebrow">Concept C</div>
+    <h2>The Explorer — one continuous timeline</h2>
+    <p class="thesis">Past and future are one river. Observed wind flows in from the left as solid
+    ink; the provider envelope opens to the right of <em>now</em>. Your rule is a quiet band on the
+    wall — the moment the river enters the band, that's your session. Hover anywhere, get every
+    provider's word. Drag the minimap to sail weeks back.</p>
+
+    <div class="frame">
+      <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span> wind-alert / explorer / sopot</div>
+      <div class="frame-body explorer">
+        <div class="mock-head">
+          <h3>Sopot <span class="sub">Fri 11 – Mon 14 Jul</span></h3>
+          <!-- provider chips: fixed color per provider (--s1..--s4). Toggling
+               one off must NOT recolor the others. "icm" shown toggled-off
+               as a state example. -->
+          <div class="chips">
+            <span class="chip"><i style="background:var(--s1)"></i>openweather</span>
+            <span class="chip"><i style="background:var(--s2)"></i>yr.no</span>
+            <span class="chip"><i style="background:var(--s3)"></i>open-meteo</span>
+            <span class="chip off"><i style="background:var(--s4)"></i>icm</span>
+            <span class="chip"><i style="background:var(--ink)"></i>observed</span>
+          </div>
+        </div>
+        <div class="chart-wrap" id="explorer-wrap">
+          <svg id="explorer" width="100%" viewBox="0 0 920 300" role="img" aria-label="Wind speed timeline: observed and forecast by provider"></svg>
+          <div class="tt" id="tt"></div>
+        </div>
+        <!-- minimap: static mockup; real one needs drag/brush + data reload -->
+        <div class="minimap"><svg id="minimap" width="100%" viewBox="0 0 920 46" aria-hidden="true"></svg></div>
+        <div class="foot">
+          <span>band = min–max across providers · line = median · dashed = gusts · gray wall = rule “Solid NW” 12–25 kn</span>
+          <span>drag minimap to browse history</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div><b>Feels like</b> a proper instrument — the one screen that explains every alert you ever got.</div>
+      <div><b>Strong at</b> provider disagreement (the band <em>is</em> the confidence); forecast-vs-reality at a glance; “why did/didn't it fire” debugging; pure pleasure to pan around.</div>
+      <div><b>Weak at</b> instant answers — it rewards looking, not glancing; the most JS of the three (one hand-rolled SVG chart, ~300 lines, still no library).</div>
+      <div><b>Build cost</b> highest. Needs forecast + observation storage (improvements #16/#19) to shine; chart itself is self-contained vanilla JS.</div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT D ============
+       The "marriage" the concept demonstrates: ONE shared time cursor.
+       - map above     = f(t)      one moment, physically rendered
+       - timeline below = f(all t) every moment, with cursor at t
+       Scrubbing/playing changes t; readout, particles and cursor all follow.
+       No mode switching, no second page. -->
+  <section class="concept">
+    <div class="eyebrow">Concept D</div>
+    <h2>The Window — living map over a scrubbable timeline</h2>
+    <p class="thesis">Windy-style, and the marriage is one shared clock. The map above shows
+    <em>one moment</em> — animated particles carry strength (color, length, pace) and direction,
+    engine borrowed from <code>../wind-range-widget</code>. The timeline below shows <em>all
+    moments</em> — the Explorer chart, demoted to a scrubber but keeping envelope, rule band and
+    observed line. Drag the cursor: the sky obeys. Press ▶ and watch the weekend happen.</p>
+
+    <div class="frame">
+      <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span> wind-alert / window / sopot</div>
+      <div class="frame-body" style="padding:0">
+        <div class="windy">
+          <div class="map" id="wmap">
+            <!-- Stylized Gdańsk Bay silhouette (land west shore + Hel spit).
+                 DECORATIVE APPROXIMATION, not geography. Real page: one
+                 vendored SVG silhouette per location (no CDN map tiles —
+                 see web/ARCH.md constraint). ../wind-range-widget's
+                 backgroundRenderer hook is the integration point if the
+                 widget itself is reused. -->
+            <svg class="coast" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <polygon points="0,0 78,0 64,34 84,78 58,128 76,182 52,240 0,240"
+                       fill="#182631" stroke="#2b4356" stroke-width="1.5"/>
+              <polygon points="96,0 132,0 208,28 296,58 344,92 336,102 288,74 200,46 118,16"
+                       fill="#182631" stroke="#2b4356" stroke-width="1.5"/>
+              <text x="24" y="120" fill="rgba(234,246,255,.22)" font-size="9" letter-spacing="2">LAND</text>
+              <text x="230" y="160" fill="rgba(120,190,230,.25)" font-size="9" letter-spacing="3">GDAŃSK BAY</text>
+            </svg>
+            <canvas id="wparticles" aria-hidden="true"></canvas>
+            <div class="marker"><i></i><span>Sopot</span></div>
+            <!-- readout values are all placeholders; setTime() in JS
+                 overwrites every field on load and on scrub -->
+            <div class="readout">
+              <div class="r-top"><span id="w-time">Sat 12:00</span><span class="tag" id="w-tag">observed</span></div>
+              <div class="r-big"><b id="w-spd">18</b> <small>kn</small> <span class="arrow" id="w-arrow">↑</span></div>
+              <div class="r-meta"><span id="w-dir">NW 313°</span> · <span id="w-gst">gusts 24 kn</span></div>
+              <div class="r-rule" id="w-rule">● inside rule “Solid NW” 12–25 kn</div>
+            </div>
+            <div class="maptag">particles = wind at cursor time</div>
+          </div>
+          <div class="controls">
+            <button class="play" id="w-play" aria-label="Play timeline">▶</button>
+            <span>drag the timeline — the map follows · ▶ plays Fri → Sun</span>
+            <span class="speedleg" aria-hidden="true">
+              <i style="background:#9bd7f7"></i><i style="background:#53b8ec"></i><i style="background:#4fd68a"></i><i style="background:#ffc44d"></i><i style="background:#ff6a4d"></i>
+              <span>0→35 kn</span>
+            </span>
+          </div>
+          <div class="scrubwrap">
+            <svg id="scrub" width="100%" viewBox="0 0 920 150" role="img"
+                 aria-label="Draggable wind timeline: observed and forecast, drag to change map time"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div><b>Feels like</b> Windy, but it's <em>your</em> spot, <em>your</em> rule, and reality drawn next to the forecast.</div>
+      <div><b>Strong at</b> physical intuition — direction and strength hit before you read a single number; one time-cursor marries glance (map) and depth (chart) with zero mode switching; play = the whole weekend in ten seconds.</div>
+      <div><b>Weak at</b> comparing hours side by side (the map shows one moment — the Board shows thirty); always-dark panel inside a light page is a taste call; needs a coastline silhouette per location (vendored asset — no CDN tiles).</div>
+      <div><b>Build cost</b> highest of the four. Particle engine exists in ../wind-range-widget (vendor ~150 lines, swap sweep-cycle for scrub-driven config); scrubber is Concept C's chart + pointer drag; same storage needs as C (#16/#19).</div>
+    </div>
+  </section>
+
+  <footer class="pick">
+    <b>How to choose:</b> Board if the page is for <em>reading conditions</em>, Sessions if it's for
+    <em>deciding</em>, Explorer if it's for <em>understanding</em>, Window if it's for
+    <em>feeling it before you drive</em>. Window is itself a marriage — glanceable widget on top,
+    deep-dive timeline below, one clock. They also stack — Sessions on top, Explorer one tap
+    deeper — but we start with one.
+  </footer>
+</div>
+
+<script>
+/* ============================================================================
+   MOCKUP-ONLY SCRIPT.
+   Generates fake data and renders the three mockups. In the real
+   implementation:
+     - Concept A: this entire script disappears — table rendered server-side.
+     - Concept B: sparkline helper (~15 lines) survives as a static asset;
+       cards/strip rendered server-side.
+     - Concept C: the buildExplorer() approach survives (vanilla SVG built
+       from data arrays), but data arrives from the server (JSON endpoint or
+       data attributes on the fragment), not from series() noise below.
+   ==========================================================================*/
+(function () {
+  "use strict";
+
+  /* ---------- shared fake data ----------
+     72 hourly points = Fri 00:00 .. Sun 23:00. NOW = index 36 (Sat 12:00).
+     All speeds in KNOTS (real model stores m/s — convert server-side).
+     series(base) shapes plausible sea-breeze days: afternoon peak, Saturday
+     as the windy day, deterministic sin/cos noise so the mockup is stable. */
+  const HOURS = 72, NOW = 36;
+  function series(base) {
+    const out = [];
+    for (let h = 0; h < HOURS; h++) {
+      const day = Math.sin(((h % 24) - 6) / 24 * Math.PI * 2) * 6;      // afternoon peak
+      const trend = h < 30 ? 6 : h < 54 ? 14 : 8;                       // Sat = the day
+      const n = Math.sin(h * 1.7 + base) * 1.6 + Math.cos(h * .53 + base * 2) * 1.2;
+      out.push(Math.max(1, trend + day * (h < 30 ? .4 : 1) + n + base));
+    }
+    return out;
+  }
+  const prov = { ow: series(0.6), yr: series(-0.4), om: series(1.4), icm: series(-1.2) };
+  const provList = [
+    ["openweather", prov.ow, "var(--s1)"],
+    ["yr.no",       prov.yr, "var(--s2)"],
+    ["open-meteo",  prov.om, "var(--s3)"],
+    ["icm",         prov.icm,"var(--s4)"]
+  ];
+  /* aggregates per hour: envelope lo/hi = min/max of 4 providers,
+     median = mean of middle two, gust faked as max*1.35 (real gusts come
+     from providers — improvement-ideas.md #7) */
+  const median = [], lo = [], hi = [], gust = [];
+  for (let h = 0; h < HOURS; h++) {
+    const v = [prov.ow[h], prov.yr[h], prov.om[h], prov.icm[h]].sort((a, b) => a - b);
+    lo.push(v[0]); hi.push(v[3]); median.push((v[1] + v[2]) / 2);
+    gust.push(v[3] * 1.35);
+  }
+  // observed = what "actually happened", exists only up to NOW
+  const observed = median.slice(0, NOW + 1).map((v, h) => Math.max(1, v + Math.sin(h * .9) * 1.8 - 1));
+  // wind direction ~NW; meteorological degrees (direction wind comes FROM)
+  const dirAt = h => (300 + Math.sin(h * .3) * 25 + 360) % 360;
+
+  /* ---------- concept A : board ---------- */
+  // sequential ramp: one step per 5 kn, capped at step 7 (35+ kn)
+  const ramp = ["var(--seq-100)","var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)","var(--seq-700)"];
+  /* Cell text color is FIXED per ramp step (not themed): ramp hexes are the
+     same in light and dark mode, so light steps (1-3) always get dark text,
+     dark steps (4-7) always white. Contrast holds in both themes. */
+  const cellInkDark = "#0b0b0b";
+  function speedCell(kn) {
+    const i = Math.min(6, Math.floor(kn / 5));
+    const ink = i <= 2 ? cellInkDark : "#ffffff";
+    return `<td style="background:${ramp[i]};color:${ink}">${Math.round(kn)}</td>`;
+  }
+  /* Direction arrow: rotate "↑" by (deg + 180) % 360 so the arrow points
+     where the wind blows TO (meteorological deg = where it comes FROM).
+     Same convention as alert-job/internal/wind_arrow_renderer.go. */
+  function arrowCell(deg) {
+    return `<td class="blank"><span class="arrow" style="transform:rotate(${(deg + 180) % 360}deg)">↑</span></td>`;
+  }
+  (function buildBoard() {
+    const el = document.getElementById("board");
+    if (!el) return;
+    const from = 30, to = 48; // Sat 06:00 .. Sun 00:00 within the 72h array
+    const idx = [];
+    for (let h = from; h < to; h++) idx.push(h);
+    let html = "<table><tr><th class='rowlab'></th>";
+    idx.forEach(h => {
+      // hours covered by an alert rule get emphasized headers ("framed")
+      const inRule = (h % 24) >= 13 && (h % 24) <= 18;
+      html += `<th style="${inRule ? "color:var(--ink);font-weight:700" : ""}">${String(h % 24).padStart(2,"0")}</th>`;
+    });
+    html += "</tr>";
+    html += "<tr><td class='rowlab'>wind kn</td>" + idx.map(h => speedCell(median[h])).join("") + "</tr>";
+    html += "<tr><td class='rowlab'>gust kn</td>" + idx.map(h => speedCell(gust[h])).join("") + "</tr>";
+    html += "<tr><td class='rowlab'>dir</td>" + idx.map(h => arrowCell(dirAt(h))).join("") + "</tr>";
+    /* agreement dots: how many of 4 providers sit within ±3 kn of each other,
+       approximated here from the min–max spread. Thresholds (3/5/8 kn) are
+       ARBITRARY — tune with real data. */
+    html += "<tr><td class='rowlab'>agree</td>" + idx.map(h => {
+      const spread = hi[h] - lo[h];
+      const n = spread < 3 ? 4 : spread < 5 ? 3 : spread < 8 ? 2 : 1;
+      return `<td class="blank agree" style="color:var(--ink-2)">${"●".repeat(n)}${"○".repeat(4 - n)}</td>`;
+    }).join("") + "</tr>";
+    /* observed row: filled up to NOW for today; full row on past days;
+       hidden entirely until an observation source exists (#19) */
+    html += "<tr><td class='rowlab' style='color:var(--muted)'>observed</td>" + idx.map(h =>
+      h <= NOW ? speedCell(observed[h]) : "<td class='blank' style='color:var(--grid)'>·</td>"
+    ).join("") + "</tr>";
+    html += "</table>";
+    html += "<div class='obs-note'>observed = nearest station reading; fills in as the day happens. Past days show the full row.</div>";
+    el.innerHTML = html;
+    const leg = document.getElementById("board-legend");
+    if (leg) leg.innerHTML = ramp.map(c => `<i style="background:${c}"></i>`).join("");
+  })();
+
+  /* ---------- concept B : sparklines ----------
+     Tiny area+line per card from data-spark="csv of knots". Fixed y-max 30 kn
+     across ALL cards so sparklines are comparable to each other. Peak point
+     emphasized with a surface-ringed dot. */
+  document.querySelectorAll("[data-spark]").forEach(svg => {
+    const vals = svg.getAttribute("data-spark").split(",").map(Number);
+    const w = 86, h = 44, max = 30;
+    const pts = vals.map((v, i) => [i / (vals.length - 1) * (w - 4) + 2, h - 4 - v / max * (h - 10)]);
+    const line = pts.map(p => p.join(",")).join(" ");
+    const area = `2,${h - 2} ${line} ${w - 2},${h - 2}`;
+    const peak = pts.reduce((a, b) => (b[1] < a[1] ? b : a));
+    svg.innerHTML =
+      `<polygon points="${area}" fill="var(--band-wash)"/>` +
+      `<polyline points="${line}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>` +
+      `<circle cx="${peak[0]}" cy="${peak[1]}" r="3" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+
+  /* ---------- concept B : season strip ----------
+     Hardcoded rideable/big days. Real source: alert history table (#16). */
+  const winDays  = [3,7,8,12,16,20,21,27];       // rideable
+  const bigDays  = [8,20,27];                     // >20 kn sessions
+  function buildStrip(id, offset) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let s = "";
+    for (let d = 1; d <= 30; d++) {
+      const dd = d + offset;
+      const cls = bigDays.includes(dd % 31) ? "big" : winDays.includes(dd % 31) ? "win" : "";
+      s += `<i class="${cls}" title="day ${d}"></i>`;
+    }
+    el.innerHTML = s;
+  }
+  buildStrip("season-strip", 0);
+  buildStrip("season-strip2", 11);
+
+  /* ---------- concept C : explorer chart ----------
+     Layer order (bottom → top) matters for readability:
+       grid → rule band → day ticks → provider envelope → dashed gusts →
+       forecast median → observed line → past-forecast ghost → now line →
+       direct labels → endpoint dot → hover crosshair.
+     All coordinates computed via x()/y() from the data arrays. */
+  (function buildExplorer() {
+    const svg = document.getElementById("explorer");
+    if (!svg) return;
+    const W = 920, H = 300, L = 42, R = 12, T = 16, B = 34; // margins: L for y labels, B for day labels
+    const pw = W - L - R, ph = H - T - B, MAX = 35;         // y axis 0..35 kn
+    const x = h => L + h / (HOURS - 1) * pw;
+    const y = v => T + ph - Math.min(v, MAX) / MAX * ph;
+    const pl = arr => arr.map((v, h) => `${x(h).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+
+    let s = "";
+    // grid + y labels (every 5 kn line, every 10 kn label — keep grid recessive)
+    for (let v = 0; v <= MAX; v += 5) {
+      s += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      if (v % 10 === 0) s += `<text x="${L - 7}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${v}</text>`;
+    }
+    s += `<text x="${L - 7}" y="${T - 4}" text-anchor="end" font-size="9" fill="var(--muted)">kn</text>`;
+    // rule band: neutral gray wash so it never reads as a data series
+    s += `<rect x="${L}" y="${y(25)}" width="${pw}" height="${y(12) - y(25)}" fill="var(--rule-wash)"/>`;
+    s += `<text x="${W - R - 6}" y="${y(25) + 12}" text-anchor="end" font-size="10" fill="var(--muted)">rule · Solid NW · 12–25 kn</text>`;
+    // day separators
+    [["Fri 11", 0], ["Sat 12", 24], ["Sun 13", 48]].forEach(([lab, h]) => {
+      s += `<line x1="${x(h)}" y1="${T}" x2="${x(h)}" y2="${T + ph}" stroke="var(--baseline)" stroke-width="1"/>`;
+      s += `<text x="${x(h) + 5}" y="${H - 14}" font-size="10" fill="var(--ink-2)">${lab}</text>`;
+    });
+    // provider min–max envelope — forecast side only (right of NOW).
+    // Polygon: top edge left→right along hi[], then bottom edge right→left along lo[].
+    let band = "";
+    for (let h = NOW; h < HOURS; h++) band += `${x(h).toFixed(1)},${y(hi[h]).toFixed(1)} `;
+    for (let h = HOURS - 1; h >= NOW; h--) band += `${x(h).toFixed(1)},${y(lo[h]).toFixed(1)} `;
+    s += `<polygon points="${band}" fill="var(--band-wash)"/>`;
+    // gust median: dashed, lighter step of the same blue (gusts are the same
+    // measure family as wind speed — NOT a new categorical color)
+    s += `<polyline points="${median.map((_, h) => h).filter(h => h >= NOW).map(h => `${x(h).toFixed(1)},${y(gust[h]).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--seq-300)" stroke-width="1.6" stroke-dasharray="4 4"/>`;
+    // forecast median line
+    s += `<polyline points="${median.map((_, h) => h).filter(h => h >= NOW).map(h => `${x(h).toFixed(1)},${y(median[h]).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--s1)" stroke-width="2.2" stroke-linejoin="round"/>`;
+    // observed line: primary ink — "reality" outranks any provider color
+    s += `<polyline points="${pl(observed)}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>`;
+    // ghost on the past: what the forecast HAD predicted (faint dashed blue).
+    // The gap between ghost and observed = forecast error, visible at a glance.
+    s += `<polyline points="${median.slice(0, NOW + 1).map((v, h) => `${x(h).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--s1)" stroke-width="1.4" opacity="0.45" stroke-dasharray="2 3"/>`;
+    // now line
+    s += `<line x1="${x(NOW)}" y1="${T - 4}" x2="${x(NOW)}" y2="${T + ph}" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="3 3"/>`;
+    s += `<text x="${x(NOW)}" y="${T - 5}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ink)">now</text>`;
+    // selective direct labels (never label every point)
+    s += `<text x="${x(20)}" y="${y(observed[20]) - 8}" font-size="10" font-weight="600" fill="var(--ink)">observed</text>`;
+    s += `<text x="${x(58)}" y="${y(median[58]) - 10}" font-size="10" font-weight="600" fill="var(--s1)">forecast median</text>`;
+    s += `<text x="${x(52)}" y="${y(gust[52]) - 8}" font-size="10" fill="var(--seq-300)">gusts</text>`;
+    // endpoint emphasis: last observed value, ringed with surface color
+    s += `<circle cx="${x(NOW)}" cy="${y(observed[NOW])}" r="4" fill="var(--ink)" stroke="var(--surface)" stroke-width="2"/>`;
+    // hover crosshair, positioned by the mousemove handler
+    s += `<line id="xh" x1="0" y1="${T}" x2="0" y2="${T + ph}" stroke="var(--ink-2)" stroke-width="1" opacity="0"/>`;
+    svg.innerHTML = s;
+
+    /* hover layer: crosshair + tooltip listing every provider at that hour.
+       Mouse-only in this mockup — real page needs touch (tap) support and a
+       reachable table view as the accessibility fallback. */
+    const wrap = document.getElementById("explorer-wrap");
+    const tt = document.getElementById("tt");
+    const xh = document.getElementById("xh");
+    const hourLabel = h => `${["Fri","Sat","Sun","Mon"][Math.floor(h / 24)]} ${String(h % 24).padStart(2,"0")}:00`;
+    wrap.addEventListener("mousemove", e => {
+      // convert client px → viewBox px (svg scales with container width)
+      const r = svg.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width * W;
+      if (px < L || px > W - R) { tt.style.display = "none"; xh.setAttribute("opacity", 0); return; }
+      const h = Math.round((px - L) / pw * (HOURS - 1));
+      xh.setAttribute("x1", x(h)); xh.setAttribute("x2", x(h)); xh.setAttribute("opacity", .5);
+      let rows = provList.map(([n, arr, c]) =>
+        `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:5px"></span>${n}</td><td>${arr[h].toFixed(1)} kn</td></tr>`).join("");
+      if (h <= NOW) rows += `<tr><td><b>observed</b></td><td><b>${observed[h].toFixed(1)} kn</b></td></tr>`;
+      tt.innerHTML = `<div class="tt-h">${hourLabel(h)}${h <= NOW ? " · past" : ""}</div><table>${rows}</table>`;
+      tt.style.display = "block";
+      // flip tooltip to the left of the cursor near the right edge
+      const wr = wrap.getBoundingClientRect();
+      const ttw = tt.offsetWidth;
+      let left = (x(h) / W) * wr.width + 14;
+      if (left + ttw > wr.width - 8) left = (x(h) / W) * wr.width - ttw - 14;
+      tt.style.left = left + "px";
+      tt.style.top = "18px";
+    });
+    wrap.addEventListener("mouseleave", () => { tt.style.display = "none"; xh.setAttribute("opacity", 0); });
+
+    /* minimap: 30 days of context with the current 72h window highlighted.
+       STATIC in this mockup. Real implementation: pointer drag on the window
+       rect → hx-get (or fetch) for the selected range → re-render main chart. */
+    const mm = document.getElementById("minimap");
+    if (mm) {
+      let m = "";
+      const md = 30 * 24, mx = i => 4 + i / md * (W - 8);
+      let pts2 = "";
+      for (let i = 0; i < md; i += 3) {
+        const day = Math.sin(((i % 24) - 6) / 24 * Math.PI * 2) * 5;
+        const slow = 10 + Math.sin(i / 90) * 7 + Math.cos(i / 41) * 3;
+        const v = Math.max(1, slow + day * .5);
+        pts2 += `${mx(i).toFixed(1)},${(42 - v / 35 * 36).toFixed(1)} `;
+      }
+      m += `<rect x="4" y="4" width="${W - 8}" height="38" fill="none" stroke="var(--grid)"/>`;
+      m += `<polyline points="${pts2}" fill="none" stroke="var(--muted)" stroke-width="1"/>`;
+      const wx = mx(md - 72), ww = mx(md) - wx;
+      m += `<rect x="${wx}" y="4" width="${ww}" height="38" fill="var(--band-wash)" stroke="var(--s1)" stroke-width="1.2" rx="3"/>`;
+      m += `<text x="8" y="15" font-size="9" fill="var(--muted)">14 Jun</text>`;
+      m += `<text x="${W - 10}" y="15" text-anchor="end" font-size="9" fill="var(--muted)">14 Jul</text>`;
+      mm.innerHTML = m;
+    }
+  })();
+
+  /* ---------- concept D : windy map + scrub timeline ----------
+     ARCHITECTURE (the part worth copying):
+       one mutable time value T (in fractional hours) is the single source of
+       truth. setTime(t) fans it out to: scrub cursor position, readout
+       fields, and the particle engine's current wind (curSpd/curDir).
+       Particles pick up new wind lazily — only on respawn (lifecycle is
+       1.4–2.6 s) — which gives a natural, windy-like transition instead of
+       every streak snapping to the new direction at once.
+
+     PROVENANCE: particle logic adapted from
+       ../wind-range-widget/src/wind-particles.ts (MIT, same author).
+       Changes vs. the original:
+         - config driven by scrub time, not a 7 s dir-range sweep cycle
+         - px velocity scales with wind speed (original: constant 120 px/s)
+         - streak length + color scale with speed (original: constant/gray)
+       For the real page, vendor the original class and apply these deltas —
+       it additionally handles ResizeObserver + destroy() properly.
+
+     ACCESSIBILITY: prefers-reduced-motion → no animation loop, no autoplay;
+       a static streak field is drawn once per scrub instead. The readout
+       always carries the full information as text — animation is redundant
+       encoding, never the only channel. */
+  (function buildWindy() {
+    const map = document.getElementById("wmap");
+    const scrub = document.getElementById("scrub");
+    if (!map || !scrub) return;
+    const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // one continuous display series: observed up to NOW, forecast median after
+    const disp = observed.concat(median.slice(NOW + 1));
+    const lerp = (arr, t) => {
+      const i = Math.max(0, Math.min(arr.length - 2, Math.floor(t)));
+      return arr[i] + (arr[i + 1] - arr[i]) * (t - i);
+    };
+    const dayName = ["Fri", "Sat", "Sun", "Mon"];
+    const fmtT = t => {
+      const h = Math.floor(t) % 24, m = Math.round((t % 1) * 60) % 60;
+      return `${dayName[Math.floor(t / 24)]} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    };
+    const compass = d => ["N","NE","E","SE","S","SW","W","NW"][Math.round(((d % 360) + 360) % 360 / 45) % 8];
+
+    /* --- particle field --- */
+    const cvs = document.getElementById("wparticles");
+    const ctx = cvs.getContext("2d");
+    let W = 0, Hh = 0, parts = [];
+    let curSpd = 15, curDir = 300; // knots / meteorological degrees at cursor
+    /* 5-step speed scale, light-blue → red, ~Windy convention. Thresholds in
+       knots roughly match kite relevance: <8 unrideable, 13+ fun, 25+ nuking. */
+    const speedColor = kn => kn < 8 ? "#9bd7f7" : kn < 13 ? "#53b8ec" : kn < 19 ? "#4fd68a" : kn < 25 ? "#ffc44d" : "#ff6a4d";
+    function mk() {
+      // jitter around cursor wind so the field looks alive, not laminar
+      const dir = (curDir + (Math.random() - .5) * 20 + 360) % 360;
+      const spd = Math.max(.5, curSpd + (Math.random() - .5) * 5);
+      return { x: Math.random() * W, y: Math.random() * Hh, dir, spd,
+        age: 0, maxAge: 1.4 + Math.random() * 1.2, o: .35 + Math.random() * .4 };
+    }
+    function seed() {
+      parts = [];
+      const n = Math.min(260, Math.max(90, Math.floor(W * Hh / 4500)));
+      for (let i = 0; i < n; i++) { const p = mk(); p.age = Math.random() * p.maxAge; parts.push(p); }
+    }
+    function resize() {
+      W = map.clientWidth; Hh = map.clientHeight;
+      if (!W || !Hh) return;
+      cvs.width = W; cvs.height = Hh;
+      seed();
+      if (RM) step(0.001);
+    }
+    function step(dt) {
+      ctx.clearRect(0, 0, W, Hh);
+      ctx.lineCap = "round";
+      for (let i = 0; i < parts.length; i++) {
+        let p = parts[i];
+        p.age += dt;
+        if (p.age >= p.maxAge || p.x < -60 || p.x > W + 60 || p.y < -60 || p.y > Hh + 60) {
+          p = parts[i] = mk(); // respawn picks up current cursor wind
+        }
+        const rad = p.dir * Math.PI / 180;
+        const v = 18 + p.spd * 5;          // px/s scales with knots
+        /* meteorological convention: dir = where wind comes FROM, so a
+           0° (north) wind moves particles DOWN the screen (southward).
+           Same math as ../wind-range-widget — do not "fix" the signs. */
+        p.x -= Math.sin(rad) * v * dt;
+        p.y += Math.cos(rad) * v * dt;
+        // fade in (0.25s) — hold — fade out (0.6s)
+        let a = p.age < .25 ? p.age / .25 : p.age > p.maxAge - .6 ? (p.maxAge - p.age) / .6 : 1;
+        a *= p.o;
+        if (a <= .01) continue;
+        const len = 8 + p.spd * 1.1;       // longer streak = stronger wind
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + Math.sin(rad) * len, p.y - Math.cos(rad) * len);
+        ctx.strokeStyle = speedColor(p.spd);
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = a;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+    let last = 0;
+    function frame(time) {
+      const dt = last ? Math.min((time - last) / 1000, .05) : 1 / 60;
+      last = time;
+      step(dt);
+      requestAnimationFrame(frame);
+    }
+    if (!RM) requestAnimationFrame(frame); // reduced motion: static streak field
+
+    /* --- scrub timeline: compact Explorer chart ---
+       Colors are FIXED dark-panel values (not theme tokens) because the
+       .windy panel is single-theme — see the CSS comment on .windy. */
+    const SW = 920, SH = 150, SL = 40, SR = 10, ST = 10, SB = 24;
+    const spw = SW - SL - SR, sph = SH - ST - SB, SMAX = 35;
+    const sx = t => SL + t / (HOURS - 1) * spw;
+    const sy = v => ST + sph - Math.min(v, SMAX) / SMAX * sph;
+    let s = "";
+    for (let v = 0; v <= SMAX; v += 10) {
+      s += `<line x1="${SL}" y1="${sy(v)}" x2="${SW - SR}" y2="${sy(v)}" stroke="rgba(255,255,255,.08)"/>`;
+      s += `<text x="${SL - 6}" y="${sy(v) + 3}" text-anchor="end" font-size="9" fill="rgba(234,246,255,.4)">${v}</text>`;
+    }
+    s += `<rect x="${SL}" y="${sy(25)}" width="${spw}" height="${sy(12) - sy(25)}" fill="rgba(255,255,255,.06)"/>`;
+    s += `<text x="${SW - SR - 4}" y="${sy(25) + 10}" text-anchor="end" font-size="8.5" fill="rgba(234,246,255,.35)">rule 12–25 kn</text>`;
+    [["Fri", 0], ["Sat", 24], ["Sun", 48]].forEach(([lab, h]) => {
+      s += `<line x1="${sx(h)}" y1="${ST}" x2="${sx(h)}" y2="${ST + sph}" stroke="rgba(255,255,255,.12)"/>`;
+      s += `<text x="${sx(h) + 4}" y="${SH - 10}" font-size="9" fill="rgba(234,246,255,.5)">${lab}</text>`;
+    });
+    let sband = "";
+    for (let h = NOW; h < HOURS; h++) sband += `${sx(h).toFixed(1)},${sy(hi[h]).toFixed(1)} `;
+    for (let h = HOURS - 1; h >= NOW; h--) sband += `${sx(h).toFixed(1)},${sy(lo[h]).toFixed(1)} `;
+    s += `<polygon points="${sband}" fill="rgba(0,200,255,.13)"/>`;
+    s += `<polyline points="${median.map((_, h) => h).filter(h => h >= NOW).map(h => `${sx(h).toFixed(1)},${sy(median[h]).toFixed(1)}`).join(" ")}" fill="none" stroke="#00c8ff" stroke-width="1.8" stroke-linejoin="round"/>`;
+    s += `<polyline points="${observed.map((v, h) => `${sx(h).toFixed(1)},${sy(v).toFixed(1)}`).join(" ")}" fill="none" stroke="#eaf6ff" stroke-width="1.8" stroke-linejoin="round"/>`;
+    s += `<line x1="${sx(NOW)}" y1="${ST}" x2="${sx(NOW)}" y2="${ST + sph}" stroke="rgba(234,246,255,.45)" stroke-dasharray="3 3"/>`;
+    s += `<text x="${sx(NOW)}" y="${ST + 8}" text-anchor="middle" font-size="8.5" fill="rgba(234,246,255,.5)">now</text>`;
+    // cursor group: positioned via transform in setTime(); dot rides the curve
+    s += `<g id="wcur"><line x1="0" x2="0" y1="${ST}" y2="${ST + sph}" stroke="#00c8ff" stroke-width="1.4"/><circle cx="0" cy="${ST + sph / 2}" r="5.5" fill="#00c8ff" stroke="#0c141e" stroke-width="2"/></g>`;
+    scrub.innerHTML = s;
+    const wcur = document.getElementById("wcur");
+    const wdot = wcur.querySelector("circle");
+
+    /* --- shared clock: setTime(t) is the marriage --- */
+    const el = id => document.getElementById(id);
+    const elT = el("w-time"), elS = el("w-spd"), elG = el("w-gst"), elD = el("w-dir"),
+          elTag = el("w-tag"), elRule = el("w-rule"), elArr = el("w-arrow");
+    let T = NOW;
+    function setTime(t) {
+      T = Math.max(0, Math.min(HOURS - 1, t));
+      const spd = lerp(disp, T), g = lerp(gust, T), d = dirAt(T);
+      curSpd = spd; curDir = d; // particle respawns pick this up within ~1.5s
+      wcur.setAttribute("transform", `translate(${sx(T)},0)`);
+      wdot.setAttribute("cy", sy(spd));
+      elT.textContent = fmtT(T);
+      elS.textContent = Math.round(spd);
+      elG.textContent = `gusts ${Math.round(g)} kn`;
+      elD.textContent = `${compass(d)} ${Math.round(d)}°`;
+      // arrow points where wind blows TO (meteorological deg = FROM)
+      elArr.style.transform = `rotate(${(d + 180) % 360}deg)`;
+      elArr.style.display = "inline-block";
+      elTag.textContent = T <= NOW ? "observed" : "forecast";
+      /* rule chip: mockup checks speed only; real page evaluates the actual
+         Rule (angle + hour + confidence too) server-side or via shared logic */
+      elRule.style.display = (spd >= 12 && spd <= 25) ? "" : "none";
+      if (RM) { seed(); step(0.001); } // static field re-drawn for new time
+    }
+
+    /* drag anywhere on the scrubber (pointer events cover mouse + touch;
+       touch also needs touch-action:none on the svg — set in CSS) */
+    let dragging = false;
+    const evT = e => {
+      const r = scrub.getBoundingClientRect();
+      return ((e.clientX - r.left) / r.width * SW - SL) / spw * (HOURS - 1);
+    };
+    scrub.addEventListener("pointerdown", e => {
+      dragging = true; scrub.setPointerCapture(e.pointerId); stopPlay(); setTime(evT(e));
+    });
+    scrub.addEventListener("pointermove", e => { if (dragging) setTime(evT(e)); });
+    scrub.addEventListener("pointerup", () => { dragging = false; });
+
+    /* play: 4 forecast-hours per real second, loops at the end */
+    const playBtn = el("w-play");
+    let playing = false, playRaf = 0, playLast = 0;
+    function playFrame(time) {
+      if (!playing) return;
+      const dt = playLast ? (time - playLast) / 1000 : 0;
+      playLast = time;
+      let t = T + dt * 4;
+      if (t >= HOURS - 1) t = 0;
+      setTime(t);
+      playRaf = requestAnimationFrame(playFrame);
+    }
+    function stopPlay() {
+      playing = false; playBtn.textContent = "▶";
+      cancelAnimationFrame(playRaf); playLast = 0;
+    }
+    playBtn.addEventListener("click", () => {
+      if (playing) { stopPlay(); return; }
+      if (RM) return; // respect reduced motion: no autoplay
+      playing = true; playBtn.textContent = "⏸";
+      playRaf = requestAnimationFrame(playFrame);
+    });
+
+    setTime(NOW);
+  })();
+})();
+</script>
+</body>
+</html>
