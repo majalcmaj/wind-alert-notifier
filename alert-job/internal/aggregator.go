@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 type Forecaster interface {

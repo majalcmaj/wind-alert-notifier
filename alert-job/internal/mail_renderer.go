@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"html/template"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 //go:embed mail_template.html

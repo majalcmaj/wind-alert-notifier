@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 // Hardcoded for the Gdańsk/Sopot location until lat/lon → row/col resolution is implemented.
