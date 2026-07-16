@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
-	"windalert/web/web/internal/validate"
+	"wind-alert/internal/model"
+	"wind-alert/web/internal/validate"
 )
 
 type rulesListData struct {

@@ -1,47 +1,46 @@
-GO_PATHS = ./shared/... ./alert-job/... ./web/...
+docker-image ?= wind-alert-web:latest
+GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
-.PHONY: build vet test ci lint lint-fix fmt clean
+GO_SRCS := $(shell find . -name '*.go' -not -path '*/vendor/*')
+JS_SRCS := $(shell find . -name '*.js' -not -path '*/vendor/*' -not -path '*/node_modules/*')
+BIN_DIR ?= bin
 
-vet:
-	go vet $(GO_PATHS)
+.PHONY: build build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
+
+$(BIN_DIR)/wind-alert-web: $(GO_SRCS) $(JS_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web web/main.go
+
+build: $(BIN_DIR)/wind-alert-web
+
+clean:
+	[ ! -d bin ] || rm -rf bin
 
 test:
-	go test $(GO_PATHS)
+	go test -v ./...
 
-ci: vet test
-
-lint:
-	$(MAKE) -C alert-job lint
-	$(MAKE) -C web lint
-
-lint-fix:
-	$(MAKE) -C alert-job lint-fix
-	$(MAKE) -C web lint-fix
+test-coverage:
+	go test -timeout=30s -cover -coverprofile test-coverage.out ./... && go tool cover -html=test-coverage.out
 
 fmt:
-	go fmt $(GO_PATHS)
+	go fmt ./...
 
-.PHONY: clean
-clean:
-	$(MAKE) -C alert-job clean
-	$(MAKE) -C web clean
+lint:
+	go run $(GOLANGCI_LINT_PACKAGE) run
 
-.PHONY: check-env
-check-env:
-	@test -f alert-job/.env || (echo "Missing alert-job/.env - copy from alert-job/.env.template" >&2; exit 1)
-	@test -f web/.env || (echo "Missing web/.env - copy from web/.env.template" >&2; exit 1)
+lint-fix:
+	go run $(GOLANGCI_LINT_PACKAGE) run --fix
 
-.PHONY: build
-build:
-	docker compose build
+bin/.docker-image-id: $(BIN_DIR)/wind-alert-web Dockerfile
+	$(CHECK_DOCKER)
+	docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ -f Dockerfile ..
 
-.PHONY: up-recreate
-up-recreate: build
-	docker compose up --force-recreate
+build-docker: bin/.docker-image-id
 
-.PHONY: up
-up: check-env
-	docker compose up 
+$(BIN_DIR)/rie-proxy: $(GO_SRCS)
+	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./rie-proxy
+build-rie-proxy: $(BIN_DIR)/rie-proxy
 
+bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy Dockerfile.rie-proxy
+	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ ..

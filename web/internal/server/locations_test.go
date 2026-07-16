@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 // fakeLocationsStore wraps fakeStore and adds configurable locations + call recording.

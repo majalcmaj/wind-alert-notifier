@@ -6,8 +6,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
-	"github.com/majalcmaj/wind-alert/shared/dynamo"
-	"windalert/web/web/internal/server"
+	"wind-alert/internal/dynamo"
+	"wind-alert/web/internal/server"
 )
 
 func main() {

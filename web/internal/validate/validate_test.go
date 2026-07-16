@@ -3,7 +3,7 @@ package validate
 import (
 	"testing"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 func TestValidateLocation(t *testing.T) {

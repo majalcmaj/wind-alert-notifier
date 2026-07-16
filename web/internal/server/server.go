@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
-	"windalert/web/web/internal/web"
+	"wind-alert/internal/model"
+	"wind-alert/web/internal/web"
 )
 
 type Datastore interface {

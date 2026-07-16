@@ -1,0 +1,499 @@
+<!doctype html>
+<!--
+  ============================================================================
+  Wind Alert — Concept D v2 "The Window": APPROVED reference design
+  ============================================================================
+
+  Final assembled mockup of the forecast & history page, chosen by the user
+  after iterating on docs/forecast-page-concepts.html (Concept D) and a
+  variants lab. Open directly in a browser — self-contained, fake data.
+
+  DESIGN DECISIONS LOCKED IN (from the iteration round):
+    1A  Direction arrows in a dedicated strip under the plot (not on-curve
+        barbs). White = observed, dim cyan = forecast.
+    2B  Near-miss treatment: hours where a rule's SPEED fits but DIRECTION
+        doesn't get a full-height AMBER 45-degree-hatched wash (not red —
+        red is reserved for danger: offshore wind / storm). The hatch
+        pattern, not the hue, is the colorblind-safe channel; the legend
+        explains it. Offending arrows in the strip also turn amber.
+    3B  Multiple rules = one slim "match lane" per rule under the arrow
+        strip: solid segment = full match (speed AND direction), hatched =
+        near-miss. Overlapping speed ranges are a non-problem in lanes.
+        Clicking a lane FOCUSES that rule: the chart shows only that rule's
+        patterned speed band + its near-miss washes; the map readout chip
+        evaluates that rule.
+
+  ARCHITECTURE (worth copying into production):
+    - One shared clock: a single time value T (fractional hours). setTime(t)
+      fans out to particle field config, map readout, timeline cursor and
+      the per-rule status line. Lane click changes `focus` and re-renders
+      the timeline; the clock survives re-render.
+    - matchState(rule, hour) -> 2 full match | 1 near-miss | 0 no. All lane
+      segments, washes, arrow marks and status texts derive from this one
+      function. Production: same semantics as the alert engine's rule match.
+    - Particle engine adapted from ../wind-range-widget/src/wind-particles.ts
+      (velocity/length/color scale with knots; respawn picks up cursor wind,
+      giving a soft ~1.5 s transition when scrubbing).
+    - prefers-reduced-motion: no animation loop, no autoplay; static streak
+      field redrawn per scrub. All information always available as text.
+
+  MOCKUP SHORTCUTS (do NOT ship):
+    - All data generated from keyframes in <script> (story: Fri light W,
+      Sat solid NW, Sun pm strong SE to force near-misses).
+    - Coast silhouette is a decorative fake; production needs a vendored
+      per-location silhouette (no CDN tiles — see web/ARCH.md).
+    - Spot switcher pills (Hel/Kuznica) are static.
+    - Rule chip checks only the focused rule; gusts faked as median*1.28+2.5.
+
+  Related: docs/improvement-ideas.md (#2 session windows, #7 gusts,
+  #16 history storage, #19 observations), docs/forecast-page-concepts.html.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept D v2 — The Window, assembled</title>
+<style>
+/* Committed single-theme dark — Concept D's world. */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background: #0c141e;
+  color: #eaf6ff;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 2.2rem 1.25rem 4rem;
+}
+.wrap { max-width: 66rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.4rem; }
+.eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(234,246,255,.45); }
+h1 { font-size: 1.45rem; margin: .15rem 0 .3rem; letter-spacing: -.015em; }
+.intro p { color: rgba(234,246,255,.6); max-width: 48rem; margin: 0; font-size: .92rem; }
+
+.app { background: #101b28; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: 1rem; padding: .6rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.07); flex-wrap: wrap; }
+.topbar .loc { font-weight: 700; font-size: 1.02rem; }
+.topbar .sub { color: rgba(234,246,255,.45); font-size: .76rem; }
+.topbar .pills { margin-left: auto; display: flex; gap: .35rem; }
+.topbar .pill { font-size: .74rem; padding: .16rem .6rem; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14); color: rgba(234,246,255,.6); }
+.topbar .pill.on { background: #eaf6ff; color: #0c141e; border-color: #eaf6ff; font-weight: 600; }
+
+.map { position: relative; height: 320px; overflow: hidden;
+  background: linear-gradient(115deg,#0a1c2b 0%, #0c141e 55%, #091018 100%); }
+.map svg.coast, .map canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.marker { position: absolute; left: 24%; top: 50%; }
+.marker i { display: block; width: 10px; height: 10px; border-radius: 50%;
+  background: #00c8ff; box-shadow: 0 0 0 4px rgba(0,200,255,.18), 0 0 14px rgba(0,200,255,.5); }
+.marker span { position: absolute; left: 14px; top: -4px; color: rgba(234,246,255,.55); font-size: .72rem; letter-spacing: .08em; }
+.readout { position: absolute; top: 14px; left: 14px; min-width: 12.5rem;
+  background: rgba(8,14,22,.84); border: 1px solid rgba(255,255,255,.09); border-radius: 10px;
+  padding: .6rem .8rem .7rem; }
+.r-top { display: flex; justify-content: space-between; gap: .8rem; font-size: .74rem; color: rgba(234,246,255,.55); font-variant-numeric: tabular-nums; }
+.r-top .tag { text-transform: uppercase; letter-spacing: .1em; font-size: .62rem; font-weight: 700; color: #00c8ff; }
+.r-big { font-size: 1.9rem; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+.r-big small { font-size: .85rem; font-weight: 400; color: rgba(234,246,255,.55); }
+.r-big .arrow { display: inline-block; font-size: 1.2rem; color: #00c8ff; }
+.r-meta { font-size: .76rem; color: rgba(234,246,255,.55); font-variant-numeric: tabular-nums; }
+.r-rule { margin-top: .35rem; font-size: .72rem; font-weight: 600; }
+.r-rule.st2 { color: #4fd68a; }
+.r-rule.st1 { color: #fab219; }
+.r-rule.st0 { color: rgba(234,246,255,.4); }
+.maptag { position: absolute; right: 12px; bottom: 10px; font-size: .68rem; color: rgba(234,246,255,.35); }
+
+.controls { display: flex; align-items: center; gap: .7rem; padding: .5rem 1rem;
+  border-top: 1px solid rgba(255,255,255,.07); color: rgba(234,246,255,.55); font-size: .74rem; flex-wrap: wrap; }
+.play { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3);
+  background: transparent; color: #eaf6ff; cursor: pointer; font-size: .85rem; line-height: 1; }
+.play:hover { border-color: #00c8ff; color: #00c8ff; }
+.speedleg { display: flex; align-items: center; gap: .35rem; margin-left: auto; }
+.speedleg i { width: 16px; height: 8px; border-radius: 2px; display: block; }
+
+.tlwrap { padding: .3rem 1rem 1rem; overflow-x: auto; }
+.tlwrap svg.tl { display: block; cursor: ew-resize; touch-action: none; }
+.legend { display: flex; gap: 1.1rem; flex-wrap: wrap; align-items: center; margin-top: .55rem;
+  font-size: .72rem; color: rgba(234,246,255,.6); }
+.legend .it { display: inline-flex; align-items: center; gap: .4rem; }
+.status { margin-top: .55rem; font-size: .8rem; color: rgba(234,246,255,.75);
+  font-variant-numeric: tabular-nums; min-height: 1.3rem; }
+.status b { color: #eaf6ff; }
+.status .st2 { color: #4fd68a; }
+.status .st1 { color: #fab219; }
+.status .st0 { color: rgba(234,246,255,.4); }
+
+.foot { color: rgba(234,246,255,.55); font-size: .85rem; max-width: 50rem; }
+.foot b { color: #eaf6ff; }
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="intro">
+    <div class="eyebrow">Concept D · v2 · assembled</div>
+    <h1>The Window — map + timeline, one clock</h1>
+    <p>Particle map above, upgraded timeline below (arrow strip · amber near-miss hatch ·
+    match lanes with tap-to-focus). Drag the timeline or press ▶ — the sky, the readout and the
+    rule verdicts all follow the same cursor. Click a lane to change which rule the chart
+    focuses on. Saturday blows NW; Sunday turns strong SE and lights up the near-miss hatch.</p>
+  </header>
+
+  <div class="app">
+    <div class="topbar">
+      <span class="loc">Sopot</span>
+      <span class="sub">54.646 N, 18.512 E · Europe/Warsaw · Fri 11 – Sun 13 Jul</span>
+      <span class="pills"><span class="pill on">Sopot</span><span class="pill">Hel</span><span class="pill">Kuźnica</span></span>
+    </div>
+
+    <div class="map" id="wmap">
+      <svg class="coast" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <polygon points="0,0 78,0 64,34 84,78 58,128 76,182 52,240 0,240"
+                 fill="#182631" stroke="#2b4356" stroke-width="1.5"/>
+        <polygon points="96,0 132,0 208,28 296,58 344,92 336,102 288,74 200,46 118,16"
+                 fill="#182631" stroke="#2b4356" stroke-width="1.5"/>
+        <text x="24" y="120" fill="rgba(234,246,255,.22)" font-size="9" letter-spacing="2">LAND</text>
+        <text x="230" y="160" fill="rgba(120,190,230,.25)" font-size="9" letter-spacing="3">GDAŃSK BAY</text>
+      </svg>
+      <canvas id="wparticles" aria-hidden="true"></canvas>
+      <div class="marker"><i></i><span>Sopot</span></div>
+      <div class="readout">
+        <div class="r-top"><span id="w-time">—</span><span class="tag" id="w-tag">—</span></div>
+        <div class="r-big"><b id="w-spd">—</b> <small>kn</small> <span class="arrow" id="w-arrow">↑</span></div>
+        <div class="r-meta"><span id="w-dir">—</span> · <span id="w-gst">—</span></div>
+        <div class="r-rule" id="w-rule">—</div>
+      </div>
+      <div class="maptag">particles = wind at cursor time</div>
+    </div>
+
+    <div class="controls">
+      <button class="play" id="w-play" aria-label="Play timeline">▶</button>
+      <span>drag the timeline — the map follows · click a lane to focus a rule</span>
+      <span class="speedleg" aria-hidden="true">
+        <i style="background:#9bd7f7"></i><i style="background:#53b8ec"></i><i style="background:#4fd68a"></i><i style="background:#ffc44d"></i><i style="background:#ff6a4d"></i>
+        <span>0→35 kn</span>
+      </span>
+    </div>
+
+    <div class="tlwrap">
+      <div id="timeline"></div>
+    </div>
+  </div>
+
+  <p class="foot"><b>What ships where:</b> map panel = vendored wind-range-widget particle engine
+  + per-location coast silhouette; timeline = one vanilla-SVG builder (~250 lines) fed by
+  server-rendered JSON (per-hour speed/direction per provider + 3-state rule matches). Rule
+  evaluation reuses the alert engine's <code>matchState</code> semantics: ✓ match, ≈ speed-only
+  near-miss, — no match.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- data: keyframed 72 h story ----------
+     Fri light W · Sat solid NW · Sun am swing · Sun pm strong SE */
+  const HOURS = 72, NOW = 36;
+  function kf(keys) {
+    return t => {
+      if (t <= keys[0][0]) return keys[0][1];
+      for (let i = 1; i < keys.length; i++) {
+        if (t <= keys[i][0]) {
+          const [x0, y0] = keys[i - 1], [x1, y1] = keys[i];
+          return y0 + (y1 - y0) * (t - x0) / (x1 - x0);
+        }
+      }
+      return keys[keys.length - 1][1];
+    };
+  }
+  const spdF = kf([[0,7],[12,11],[20,8],[30,14],[38,21],[44,16],[48,9],[52,12],[57,15],[61,26],[66,27],[71,18]]);
+  const dirF = kf([[0,280],[20,290],[24,300],[40,315],[47,300],[50,285],[54,230],[58,170],[62,140],[71,132]]);
+  const median = [], lo = [], hi = [], gust = [], observed = [];
+  for (let h = 0; h < HOURS; h++) {
+    const m = Math.max(2, spdF(h) + Math.sin(h * 1.7) * 1.1);
+    median.push(m);
+    const sp = 1.5 + Math.abs(Math.sin(h * .7)) * 2.5;
+    lo.push(Math.max(1, m - sp));
+    hi.push(m + sp);
+    gust.push(m * 1.28 + 2.5);
+    if (h <= NOW) observed.push(Math.max(1.5, m + Math.sin(h * .9) * 1.7 - .8));
+  }
+  const disp = h => h <= NOW ? observed[h] : median[h];
+  const lerpAt = t => {
+    const i = Math.max(0, Math.min(HOURS - 2, Math.floor(t)));
+    return disp(i) + (disp(i + 1) - disp(i)) * (t - i);
+  };
+  const dirAt = h => (dirF(h) + Math.sin(h * 1.3) * 6 + 360) % 360;
+  const compass = d => ["N","NE","E","SE","S","SW","W","NW"][Math.round(((d % 360) + 360) % 360 / 45) % 8];
+  const dayName = ["Fri", "Sat", "Sun"];
+  const fmtT = t => `${dayName[Math.min(2, Math.floor(t / 24))]} ${String(Math.floor(t) % 24).padStart(2, "0")}:${String(Math.round((t % 1) * 60) % 60).padStart(2, "0")}`;
+
+  /* ---------- rules + 3-state matching ---------- */
+  const RULES = [
+    { name: "Solid NW",       color: "#00c8ff", pat: "dots", speed: [12, 25], dir: [270, 360] },
+    { name: "Light westerly", color: "#4fd68a", pat: "d45",  speed: [8, 14],  dir: [250, 20]  },
+    { name: "Nuking SE",      color: "#9085e9", pat: "d135", speed: [20, 33], dir: [110, 160] },
+  ];
+  const inCyc = (v, [a, b]) => a > b ? (v >= a || v <= b) : (v >= a && v <= b);
+  function matchState(rule, h) {
+    const s = disp(h), d = dirAt(h);
+    if (s < rule.speed[0] || s > rule.speed[1]) return 0;
+    return inCyc(d, rule.dir) ? 2 : 1;
+  }
+  function ranges(fn) {
+    const out = [];
+    let start = -1;
+    for (let h = 0; h < HOURS; h++) {
+      if (fn(h)) { if (start < 0) start = h; }
+      else if (start >= 0) { out.push([start, h]); start = -1; }
+    }
+    if (start >= 0) out.push([start, HOURS]);
+    return out;
+  }
+  const NM = { wash: "rgba(250,178,25,.13)", line: "#fab219" }; // amber near-miss (2B)
+
+  /* ---------- shared clock state ---------- */
+  let T = NOW, focus = 0;
+
+  /* ---------- particle map (wind-range-widget engine, speed-scaled) ---------- */
+  const map = document.getElementById("wmap");
+  const cvs = document.getElementById("wparticles");
+  const ctx = cvs.getContext("2d");
+  const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W = 0, Hh = 0, parts = [], curSpd = 15, curDir = 300;
+  const speedColor = kn => kn < 8 ? "#9bd7f7" : kn < 13 ? "#53b8ec" : kn < 19 ? "#4fd68a" : kn < 25 ? "#ffc44d" : "#ff6a4d";
+  function mk() {
+    const dir = (curDir + (Math.random() - .5) * 20 + 360) % 360;
+    const spd = Math.max(.5, curSpd + (Math.random() - .5) * 5);
+    return { x: Math.random() * W, y: Math.random() * Hh, dir, spd,
+      age: 0, maxAge: 1.4 + Math.random() * 1.2, o: .35 + Math.random() * .4 };
+  }
+  function seed() {
+    parts = [];
+    const n = Math.min(260, Math.max(90, Math.floor(W * Hh / 4500)));
+    for (let i = 0; i < n; i++) { const p = mk(); p.age = Math.random() * p.maxAge; parts.push(p); }
+  }
+  function resize() {
+    W = map.clientWidth; Hh = map.clientHeight;
+    if (!W || !Hh) return;
+    cvs.width = W; cvs.height = Hh;
+    seed();
+    if (RM) step(0.001);
+  }
+  function step(dt) {
+    ctx.clearRect(0, 0, W, Hh);
+    ctx.lineCap = "round";
+    for (let i = 0; i < parts.length; i++) {
+      let p = parts[i];
+      p.age += dt;
+      if (p.age >= p.maxAge || p.x < -60 || p.x > W + 60 || p.y < -60 || p.y > Hh + 60) {
+        p = parts[i] = mk();
+      }
+      const rad = p.dir * Math.PI / 180;
+      const v = 18 + p.spd * 5;
+      p.x -= Math.sin(rad) * v * dt;   // meteorological: dir = FROM
+      p.y += Math.cos(rad) * v * dt;
+      let a = p.age < .25 ? p.age / .25 : p.age > p.maxAge - .6 ? (p.maxAge - p.age) / .6 : 1;
+      a *= p.o;
+      if (a <= .01) continue;
+      const len = 8 + p.spd * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + Math.sin(rad) * len, p.y - Math.cos(rad) * len);
+      ctx.strokeStyle = speedColor(p.spd);
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = a;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  let last = 0;
+  (function frame(time) {
+    if (!RM) {
+      const dt = last ? Math.min((time - last) / 1000, .05) : 1 / 60;
+      last = time;
+      step(dt);
+      requestAnimationFrame(frame);
+    }
+  })(0);
+
+  /* ---------- timeline v2 (1A strip + 2B amber + 3B lanes) ---------- */
+  const host = document.getElementById("timeline");
+  const TW = 920, L = 46, R = 12, TT = 12, CH = 128, stripH = 26, laneH = 16;
+  const lanesH = RULES.length * laneH + 8, H = TT + CH + stripH + lanesH + 20;
+  const pw = TW - L - R, MAX = 35, stepW = pw / (HOURS - 1);
+  const x = t => L + t / (HOURS - 1) * pw;
+  const y = v => TT + CH - Math.min(v, MAX) / MAX * CH;
+  const arrowPath = `<path d="M0,-5.5 L0,5.5 M-3.2,-2 L0,-5.5 L3.2,-2" fill="none" stroke-width="1.6" stroke-linecap="round"/>`;
+
+  function renderTimeline() {
+    const rule = RULES[focus];
+    const patDef = (id, color, kind) => kind === "dots"
+      ? `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.2" fill="${color}" opacity=".55"/></pattern>`
+      : `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(${kind === "d45" ? 45 : 135})"><line x1="0" y1="0" x2="0" y2="7" stroke="${color}" stroke-width="1.5" opacity=".5"/></pattern>`;
+    let s = `<defs>${RULES.map((r, i) => patDef(`pr${i}`, r.color, r.pat)).join("")}` +
+      `<pattern id="pnear" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="${NM.line}" stroke-width="2.2" opacity=".45"/></pattern></defs>`;
+
+    for (let v = 0; v <= MAX; v += 10) {
+      s += `<line x1="${L}" y1="${y(v)}" x2="${TW - R}" y2="${y(v)}" stroke="rgba(255,255,255,.07)"/>`;
+      s += `<text x="${L - 6}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="rgba(234,246,255,.4)">${v}</text>`;
+    }
+    s += `<text x="${L - 6}" y="${TT - 2}" text-anchor="end" font-size="8.5" fill="rgba(234,246,255,.35)">kn</text>`;
+
+    // focused rule's speed band (patterned)
+    const yTop = y(rule.speed[1]), yBot = y(rule.speed[0]);
+    s += `<rect x="${L}" y="${yTop}" width="${pw}" height="${yBot - yTop}" fill="${rule.color}" opacity=".08"/>`;
+    s += `<rect x="${L}" y="${yTop}" width="${pw}" height="${yBot - yTop}" fill="url(#pr${focus})"/>`;
+    s += `<line x1="${L}" y1="${yTop}" x2="${TW - R}" y2="${yTop}" stroke="${rule.color}" opacity=".45"/>`;
+    s += `<line x1="${L}" y1="${yBot}" x2="${TW - R}" y2="${yBot}" stroke="${rule.color}" opacity=".45"/>`;
+    s += `<text x="${TW - R - 4}" y="${yTop + 10}" text-anchor="end" font-size="9" fill="${rule.color}">${rule.name} ${rule.speed[0]}–${rule.speed[1]} kn · ${compass(rule.dir[0])}–${compass(rule.dir[1])}</text>`;
+
+    // amber near-miss washes for focused rule
+    ranges(h => matchState(rule, h) === 1).forEach(([h0, h1]) => {
+      const rx = Math.max(L, x(h0) - stepW / 2), rw = (h1 - h0) * stepW;
+      s += `<rect x="${rx}" y="${TT}" width="${rw}" height="${CH}" fill="${NM.wash}"/>`;
+      s += `<rect x="${rx}" y="${TT}" width="${rw}" height="${CH}" fill="url(#pnear)"/>`;
+    });
+
+    [["Fri", 0], ["Sat", 24], ["Sun", 48]].forEach(([lab, h]) => {
+      s += `<line x1="${x(h)}" y1="${TT}" x2="${x(h)}" y2="${TT + CH}" stroke="rgba(255,255,255,.12)"/>`;
+      s += `<text x="${x(h) + 4}" y="${H - 6}" font-size="9" fill="rgba(234,246,255,.5)">${lab}</text>`;
+    });
+
+    let band = "";
+    for (let h = NOW; h < HOURS; h++) band += `${x(h).toFixed(1)},${y(hi[h]).toFixed(1)} `;
+    for (let h = HOURS - 1; h >= NOW; h--) band += `${x(h).toFixed(1)},${y(lo[h]).toFixed(1)} `;
+    s += `<polygon points="${band}" fill="rgba(0,200,255,.12)"/>`;
+    s += `<polyline points="${median.map((v, h) => h >= NOW ? `${x(h).toFixed(1)},${y(v).toFixed(1)}` : "").filter(Boolean).join(" ")}" fill="none" stroke="#00c8ff" stroke-width="1.8" stroke-linejoin="round"/>`;
+    s += `<polyline points="${observed.map((v, h) => `${x(h).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}" fill="none" stroke="#eaf6ff" stroke-width="1.8" stroke-linejoin="round"/>`;
+    s += `<line x1="${x(NOW)}" y1="${TT}" x2="${x(NOW)}" y2="${TT + CH}" stroke="rgba(234,246,255,.45)" stroke-dasharray="3 3"/>`;
+    s += `<text x="${x(NOW)}" y="${TT + 8}" text-anchor="middle" font-size="8.5" fill="rgba(234,246,255,.5)">now</text>`;
+
+    // 1A arrow strip; offenders vs focused rule marked amber (2B)
+    const ay = TT + CH + stripH / 2 + 2;
+    for (let h = 0; h < HOURS; h += 2) {
+      const c = matchState(rule, h) === 1 ? NM.line
+        : h <= NOW ? "rgba(234,246,255,.85)" : "rgba(0,200,255,.6)";
+      s += `<g transform="translate(${x(h)},${ay}) rotate(${(dirAt(h) + 180) % 360})" stroke="${c}">${arrowPath}</g>`;
+    }
+
+    // 3B match lanes
+    const ly0 = TT + CH + stripH + 6;
+    RULES.forEach((r, i) => {
+      const ly = ly0 + i * laneH, focused = i === focus;
+      s += `<rect x="${L}" y="${ly}" width="${pw}" height="${laneH - 4}" rx="2" fill="rgba(255,255,255,${focused ? ".07" : ".03"})"${focused ? ` stroke="${r.color}" stroke-opacity=".5"` : ""}/>`;
+      ranges(h => matchState(r, h) === 2).forEach(([h0, h1]) => {
+        s += `<rect x="${x(h0) - stepW / 2}" y="${ly + 1.5}" width="${(h1 - h0) * stepW}" height="${laneH - 7}" rx="2" fill="${r.color}" opacity=".85"/>`;
+      });
+      ranges(h => matchState(r, h) === 1).forEach(([h0, h1]) => {
+        s += `<rect x="${x(h0) - stepW / 2}" y="${ly + 1.5}" width="${(h1 - h0) * stepW}" height="${laneH - 7}" rx="2" fill="url(#pnear)" stroke="${NM.line}" stroke-opacity=".55" stroke-width=".8"/>`;
+      });
+      s += `<circle cx="${L + 7}" cy="${ly + (laneH - 4) / 2}" r="3" fill="${r.color}"/>`;
+      s += `<text x="${L + 15}" y="${ly + laneH / 2 + 2}" font-size="9" fill="rgba(234,246,255,${focused ? ".95" : ".65"})">${r.name}</text>`;
+      s += `<rect data-lane="${i}" x="${L}" y="${ly - 1}" width="${pw}" height="${laneH - 1}" fill="transparent" style="cursor:pointer"/>`;
+    });
+
+    // cursor spans chart + strip + lanes
+    s += `<g class="cur"><line x1="0" x2="0" y1="${TT}" y2="${TT + CH + stripH + lanesH}" stroke="#eaf6ff" stroke-opacity=".7" stroke-width="1.2"/></g>`;
+
+    // legend
+    const sw = (inner, w = 26) => `<svg width="${w}" height="14" viewBox="0 0 ${w} 14">${inner}</svg>`;
+    let leg = `<div class="legend">`;
+    leg += `<span class="it">${sw(`<line x1="1" y1="7" x2="25" y2="7" stroke="#eaf6ff" stroke-width="2"/>`)} observed</span>`;
+    leg += `<span class="it">${sw(`<rect x="0" y="2" width="26" height="10" fill="rgba(0,200,255,.15)"/><line x1="1" y1="7" x2="25" y2="7" stroke="#00c8ff" stroke-width="2"/>`)} forecast median ± provider spread</span>`;
+    leg += `<span class="it">${sw(`<rect x="0" y="1" width="26" height="12" fill="${rule.color}" opacity=".1"/><rect x="0" y="1" width="26" height="12" fill="url(#pr${focus})"/>`)} ${rule.name} speed range</span>`;
+    leg += `<span class="it">${sw(`<rect x="0" y="1" width="26" height="12" fill="${NM.wash}"/><rect x="0" y="1" width="26" height="12" fill="url(#pnear)"/>`)} speed fits “${rule.name}”, direction doesn't</span>`;
+    leg += `<span class="it">${sw(`<g transform="translate(13,7) rotate(135)" stroke="rgba(234,246,255,.85)">${arrowPath}</g>`)} wind blows toward arrow · amber = wrong direction for rule</span>`;
+    leg += `<span class="it">${sw(`<rect x="0" y="4" width="12" height="6" rx="2" fill="#00c8ff" opacity=".85"/><rect x="14" y="4" width="12" height="6" rx="2" fill="url(#pnear)" stroke="${NM.line}" stroke-opacity=".55"/>`)} lane: solid = match, hatched = near-miss · click to focus</span>`;
+    leg += `</div>`;
+
+    host.innerHTML = `<svg class="tl" width="100%" viewBox="0 0 ${TW} ${H}">${s}</svg>${leg}<div class="status"></div>`;
+
+    const svg = host.querySelector("svg.tl");
+    svg.querySelectorAll("[data-lane]").forEach(r => {
+      r.addEventListener("click", e => {
+        focus = +e.target.getAttribute("data-lane");
+        renderTimeline();
+        setTime(T);
+        e.stopPropagation();
+      });
+    });
+    let drag = false;
+    const evT = e => {
+      const r = svg.getBoundingClientRect();
+      return ((e.clientX - r.left) / r.width * TW - L) / pw * (HOURS - 1);
+    };
+    svg.addEventListener("pointerdown", e => {
+      if (e.target.hasAttribute && e.target.hasAttribute("data-lane")) return;
+      drag = true; svg.setPointerCapture(e.pointerId); stopPlay(); setTime(evT(e));
+    });
+    svg.addEventListener("pointermove", e => { if (drag) setTime(evT(e)); });
+    svg.addEventListener("pointerup", () => { drag = false; });
+  }
+
+  /* ---------- setTime: the marriage ---------- */
+  const el = id => document.getElementById(id);
+  const elT = el("w-time"), elS = el("w-spd"), elG = el("w-gst"), elD = el("w-dir"),
+        elTag = el("w-tag"), elRule = el("w-rule"), elArr = el("w-arrow");
+  function setTime(t) {
+    T = Math.max(0, Math.min(HOURS - 1, t));
+    const h = Math.round(T), spd = lerpAt(T), d = dirAt(T);
+    curSpd = spd; curDir = d;
+    const cur = host.querySelector(".cur");
+    if (cur) cur.setAttribute("transform", `translate(${x(T)},0)`);
+    elT.textContent = fmtT(T);
+    elS.textContent = Math.round(spd);
+    elG.textContent = `gusts ${Math.round(gust[h])} kn`;
+    elD.textContent = `${compass(d)} ${Math.round(d)}°`;
+    elArr.style.transform = `rotate(${(d + 180) % 360}deg)`;
+    elTag.textContent = T <= NOW ? "observed" : "forecast";
+    const rule = RULES[focus], m = matchState(rule, h);
+    elRule.className = "r-rule st" + m;
+    elRule.textContent = m === 2 ? `✓ ${rule.name} matching`
+      : m === 1 ? `≈ ${rule.name}: speed fits, direction off`
+      : `— ${rule.name}: ${disp(h) < rule.speed[0] ? "too light" : "too strong"}`;
+    const stat = host.querySelector(".status");
+    if (stat) {
+      const parts2 = RULES.map(r => {
+        const mm = matchState(r, h);
+        if (mm === 2) return `<span class="st2">${r.name} ✓</span>`;
+        if (mm === 1) return `<span class="st1">${r.name} ≈ direction off</span>`;
+        return `<span class="st0">${r.name} — ${disp(h) < r.speed[0] ? "too light" : "too strong"}</span>`;
+      });
+      stat.innerHTML = `<b>${fmtT(T)}</b> · <b>${Math.round(spd)} kn</b> ${compass(d)} ${Math.round(d)}° &nbsp;|&nbsp; ` + parts2.join(" · ");
+    }
+    if (RM) { seed(); step(0.001); }
+  }
+
+  /* ---------- play ---------- */
+  const playBtn = el("w-play");
+  let playing = false, playRaf = 0, playLast = 0;
+  function playFrame(time) {
+    if (!playing) return;
+    const dt = playLast ? (time - playLast) / 1000 : 0;
+    playLast = time;
+    let t = T + dt * 4;
+    if (t >= HOURS - 1) t = 0;
+    setTime(t);
+    playRaf = requestAnimationFrame(playFrame);
+  }
+  function stopPlay() {
+    playing = false; playBtn.textContent = "▶";
+    cancelAnimationFrame(playRaf); playLast = 0;
+  }
+  playBtn.addEventListener("click", () => {
+    if (playing) { stopPlay(); return; }
+    if (RM) return;
+    playing = true; playBtn.textContent = "⏸";
+    playRaf = requestAnimationFrame(playFrame);
+  });
+
+  renderTimeline();
+  setTime(NOW);
+})();
+</script>
+</body>
+</html>

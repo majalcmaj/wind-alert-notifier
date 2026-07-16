@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 func newTestStore(t *testing.T) *Store {
