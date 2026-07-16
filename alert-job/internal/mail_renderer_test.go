@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 func makeModel(reading *WeatherReading) MailModel {

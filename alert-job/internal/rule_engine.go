@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"github.com/majalcmaj/wind-alert/shared/model"
+	"wind-alert/internal/model"
 )
 
 type ConfidentRule struct {
