@@ -1,4 +1,4 @@
-module github.com/majalcmaj/wind-alert/web
+module windalert/web
 
 go 1.26
 

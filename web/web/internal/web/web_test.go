@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/majalcmaj/wind-alert/web/internal/web"
+	"windalert/web/internal/web"
 )
 
 func TestRender_layout(t *testing.T) {

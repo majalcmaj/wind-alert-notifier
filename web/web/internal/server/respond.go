@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/majalcmaj/wind-alert/web/internal/web"
+	"windalert/web/web/internal/web"
 )
 
 func httpError(w http.ResponseWriter, status int, msg string) {

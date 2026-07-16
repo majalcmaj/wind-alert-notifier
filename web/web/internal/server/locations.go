@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/majalcmaj/wind-alert/shared/model"
-	"github.com/majalcmaj/wind-alert/web/internal/validate"
+	"windalert/web/web/internal/validate"
 )
 
 type locationFormData struct {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/majalcmaj/wind-alert/shared/model"
-	"github.com/majalcmaj/wind-alert/web/internal/web"
+	"windalert/web/web/internal/web"
 )
 
 type Datastore interface {

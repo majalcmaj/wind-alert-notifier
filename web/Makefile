@@ -10,7 +10,7 @@ BIN_DIR ?= bin
 .PHONY: build build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
 
 $(BIN_DIR)/wind-alert-web: $(GO_SRCS) $(JS_SRCS)
-	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web .
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web web/main.go
 
 build: $(BIN_DIR)/wind-alert-web
 
@@ -39,8 +39,7 @@ bin/.docker-image-id: $(BIN_DIR)/wind-alert-web Dockerfile
 build-docker: bin/.docker-image-id
 
 $(BIN_DIR)/rie-proxy: $(GO_SRCS)
-	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./cmd/rie-proxy
-
+	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./rie-proxy
 build-rie-proxy: $(BIN_DIR)/rie-proxy
 
 bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy Dockerfile.rie-proxy
