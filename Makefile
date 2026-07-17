@@ -2,53 +2,76 @@ docker-image ?= wind-alert-web:latest
 GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
+DOCKER_BUILD = @docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ . 
+DOCKER_BUILD_LAMBDA = $(DOCKER_BUILD) --file docker/lambda.Dockerfile
 
-INTERNAL_SRCS := $(shell find internal/ -type f -not -path '*/vendor/*') internal/dynamo.yml
+INTERNAL_SRCS := $(shell find internal/ -type f -not -path '*/vendor/*')
 WEB_SRCS := $(shell find web/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
 JOB_SRCS := $(shell find alert-job/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
 BIN_DIR ?= bin
 
-.PHONY: clean build-web build-alert build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
+# =============== BUILD =============== 
 
-build: build-web build-job
-
-$(BIN_DIR)/wind-alert-web: $(WEB_SRCS) $(JS_SRCS)
-	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web web/main.go
-
-build-web: $(BIN_DIR)/wind-alert-web
+.PHONY: build
+build: build-web build-job build-rie-proxy
 
 $(BIN_DIR)/wind-alert-job: $(JOB_SRCS)
-	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job alert-job/main.go
-
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job ./alert-job
+.PHONY: build-job
 build-job: $(BIN_DIR)/wind-alert-job
 
+$(BIN_DIR)/wind-alert-web: $(WEB_SRCS) $(JS_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web ./web
+.PHONY: build-web
+build-web: $(BIN_DIR)/wind-alert-web
+
+$(BIN_DIR)/rie-proxy: docker/rie-proxy/main.go
+	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./docker/rie-proxy
+.PHONY: build-rie-proxy
+build-rie-proxy: $(BIN_DIR)/rie-proxy
+
+.PHONY: clean
 clean:
 	[ ! -d bin ] || rm -rf bin
 
+# =============== DOCKER =============== 
+
+bin/.web-docker-image-id: $(BIN_DIR)/wind-alert-web docker/lambda.Dockerfile
+	$(CHECK_DOCKER)
+	$(DOCKER_BUILD_LAMBDA) --build-arg binary="bin/wind-alert-web"
+.PHONY: build-web-docker
+build-web-docker: bin/.web-docker-image-id
+
+bin/.job-docker-image-id: $(BIN_DIR)/wind-alert-job docker/lambda.Dockerfile
+	$(CHECK_DOCKER)
+	$(DOCKER_BUILD_LAMBDA) --build-arg binary="bin/wind-alert-job"
+.PHONY: build-job-docker
+build-job-docker: bin/.job-docker-image-id
+
+bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy docker/rie-proxy.Dockerfile
+	$(CHECK_DOCKER)
+	$(DOCKER_BUILD) --file docker/rie-proxy.Dockerfile
+.PHONY: build-rie-proxy-docker
+build-rie-proxy-docker: bin/.rie-proxy-image-id
+
+# =============== TESTS/CHECKS =============== 
+
+.PHONY: test
 test:
 	go test -v ./...
 
+.PHONY: test-coverage
 test-coverage:
 	go test -timeout=30s -cover -coverprofile test-coverage.out ./... && go tool cover -html=test-coverage.out
 
+.PHONY: fmt
 fmt:
 	go fmt ./...
 
+.PHONY: lint
 lint:
 	go run $(GOLANGCI_LINT_PACKAGE) run
 
+.PHONY: lint-fix
 lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
-
-bin/.docker-image-id: $(BIN_DIR)/wind-alert-web Dockerfile
-	$(CHECK_DOCKER)
-	docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ -f Dockerfile ..
-
-build-docker: bin/.docker-image-id
-
-$(BIN_DIR)/rie-proxy: $(GO_SRCS)
-	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./rie-proxy
-build-rie-proxy: $(BIN_DIR)/rie-proxy
-
-bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy Dockerfile.rie-proxy
-	docker buildx build --platform linux/amd64 --provenance=false -t wind-alert-rie-proxy:latest -f Dockerfile.rie-proxy --iidfile $@ ..
