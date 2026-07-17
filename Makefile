@@ -9,7 +9,7 @@ WEB_SRCS := $(shell find web/ -name '*.go' -not -path '*/vendor/*') $(INTERNAL_S
 JOB_SRCS := $(shell find alert-job/ -name '*.go' -not -path '*/vendor/*') $(INTERNAL_SRCS)
 BIN_DIR ?= bin
 
-.PHONY: clean build-web build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
+.PHONY: clean build-web build-alert build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
 
 clean:
 	[ ! -d bin ] || rm -rf bin
@@ -18,6 +18,12 @@ $(BIN_DIR)/wind-alert-web: $(WEB_SRCS) $(JS_SRCS)
 	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web web/main.go
 
 build-web: $(BIN_DIR)/wind-alert-web
+
+
+$(BIN_DIR)/wind-alert-job: $(JOB_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job alert-job/main.go
+
+build-job: $(BIN_DIR)/wind-alert-job
 
 test:
 	go test -v ./...
