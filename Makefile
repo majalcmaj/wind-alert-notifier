@@ -30,6 +30,12 @@ $(BIN_DIR)/rie-proxy: docker/rie-proxy/main.go
 .PHONY: build-rie-proxy
 build-rie-proxy: $(BIN_DIR)/rie-proxy
 
+alert-job/internal/mail_template.html: alert-job/internal/mail_template.mjml
+	npx -y mjml $< -o $@
+
+.PHONY: render-mail-template
+render-mail-template: alert-job/internal/mail_template.html
+
 .PHONY: clean
 clean:
 	[ ! -d bin ] || rm -rf bin
@@ -54,6 +60,11 @@ bin/.rie-proxy-image-id: $(BIN_DIR)/rie-proxy docker/rie-proxy.Dockerfile
 .PHONY: build-rie-proxy-docker
 build-rie-proxy-docker: bin/.rie-proxy-image-id
 
+.PHONY: up
+up: build
+	$(CHECK_DOCKER)
+	@docker compose -f docker/docker-compose.yml up
+
 # =============== TESTS/CHECKS =============== 
 
 .PHONY: test
@@ -75,3 +86,15 @@ lint:
 .PHONY: lint-fix
 lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
+
+# =============== JOB LAMBDA =============== 
+
+.PHONY: run-job
+run-job:
+	curl "http://localhost:9090/2015-03-31/functions/function/invocations" -d '{}'
+
+.PHONY: run-job-aws
+run-job-aws:
+	aws lambda invoke --region eu-central-1 --function-name wind-alert --cli-binary-format raw-in-base64-out --payload '{}' /tmp/wind-alert-invoke.json
+	@cat /tmp/wind-alert-invoke.json | jq .
+	@aws logs tail /aws/lambda/wind-alert --region eu-central-1 --since 2m
