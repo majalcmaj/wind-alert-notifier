@@ -16,10 +16,10 @@ Resources:
       EventInvokeConfig:
         MaximumEventAgeInSeconds: 21600
         MaximumRetryAttempts: 2
-      ImageUri: 
-        Fn::Join: 
+      ImageUri:
+        Fn::Join:
           - '/'
-          - - !GetAtt WindAlertRepository.RepositoryUri 
+          - - !GetAtt WindAlertRepository.RepositoryUri
             - wind-alert:latest
       PackageType: Image
       Policies:
@@ -64,20 +64,20 @@ Resources:
 
   WindAlertRepository:
     Type: AWS::ECR::Repository
-    Properties: 
+    Properties:
       RepositoryName: "wind-alert-docker-repository"
   WindAlertRepoPolicy:
     Type: AWS::ECR::RegistryPolicy
     Properties:
-      PolicyText: 
+      PolicyText:
         Version: "2012-10-17"
-        Statement: 
-          - 
+        Statement:
+          -
             Sid: AllowImageRetrievalForLambda
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: 
+            Action:
               - "ecr:BatchGetImage"
               - "ecr:DeleteRepositoryPolicy"
               - "ecr:GetDownloadUrlForLayer"

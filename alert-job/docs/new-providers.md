@@ -57,7 +57,7 @@ type ProviderReading struct {
 }
 ```
 
-**`internal/openweather_test.go`** — pass `context.Background()` to updated call.  
+**`internal/openweather_test.go`** — pass `context.Background()` to updated call.
 **`main.go`** — pass `ctx` to `openWeather.GetForecast(ctx, loc)`.
 
 ---
@@ -66,9 +66,9 @@ type ProviderReading struct {
 
 **`internal/yrno.go`** (new)
 
-Endpoint: `GET https://api.met.no/weatherapi/locationforecast/2.0/compact?lat={lat}&lon={lon}`  
-Required header: `User-Agent: wind-alert-go/1.0 github.com/majalcmaj/wind-alert-go`  
-Response path: `properties.timeseries[].time` + `.data.instant.details.wind_speed` + `.wind_from_direction`  
+Endpoint: `GET https://api.met.no/weatherapi/locationforecast/2.0/compact?lat={lat}&lon={lon}`
+Required header: `User-Agent: wind-alert-go/1.0 github.com/majalcmaj/wind-alert-go`
+Response path: `properties.timeseries[].time` + `.data.instant.details.wind_speed` + `.wind_from_direction`
 Maps to `WeatherReading.Readings["hourly"]` (no daily; yr.no is hourly only).
 
 ```go
@@ -85,9 +85,9 @@ func (y *YrNo) GetForecast(ctx context.Context, loc Location) (*WeatherReading, 
 
 **`internal/openmeteo.go`** (new)
 
-Endpoint: `GET https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&forecast_days=7`  
-No auth required.  
-Response: `hourly.time[i]` (ISO8601), `hourly.wind_speed_10m[i]`, `hourly.wind_direction_10m[i]`  
+Endpoint: `GET https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&forecast_days=7`
+No auth required.
+Response: `hourly.time[i]` (ISO8601), `hourly.wind_speed_10m[i]`, `hourly.wind_direction_10m[i]`
 Maps to `WeatherReading.Readings["hourly"]`.
 
 ```go

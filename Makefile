@@ -2,7 +2,7 @@ docker-image ?= wind-alert-web:latest
 GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
-DOCKER_BUILD = @docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ . 
+DOCKER_BUILD = @docker buildx build --platform linux/amd64 --provenance=false -t $(docker-image) --iidfile $@ .
 DOCKER_BUILD_LAMBDA = $(DOCKER_BUILD) --file docker/lambda.Dockerfile
 
 INTERNAL_SRCS := $(shell find internal/ -type f -not -path '*/vendor/*')
@@ -10,7 +10,7 @@ WEB_SRCS := $(shell find web/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
 JOB_SRCS := $(shell find alert-job/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
 BIN_DIR ?= bin
 
-# =============== BUILD =============== 
+# =============== BUILD ===============
 
 .PHONY: build
 build: build-web build-job build-rie-proxy
@@ -40,7 +40,7 @@ render-mail-template: alert-job/internal/mail_template.html
 clean:
 	[ ! -d bin ] || rm -rf bin
 
-# =============== DOCKER =============== 
+# =============== DOCKER ===============
 
 bin/.web-docker-image-id: $(BIN_DIR)/wind-alert-web docker/lambda.Dockerfile
 	$(CHECK_DOCKER)
@@ -65,7 +65,7 @@ up: build
 	$(CHECK_DOCKER)
 	@docker compose -f docker/docker-compose.yml up
 
-# =============== TESTS/CHECKS =============== 
+# =============== TESTS/CHECKS ===============
 
 .PHONY: test
 test:
@@ -87,7 +87,13 @@ lint:
 lint-fix:
 	go run $(GOLANGCI_LINT_PACKAGE) run --fix
 
-# =============== JOB LAMBDA =============== 
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: ci
+ci: lint vet test
+# =============== JOB LAMBDA ===============
 
 .PHONY: run-job
 run-job:

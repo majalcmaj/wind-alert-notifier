@@ -78,7 +78,7 @@ Mirror `internal/openmeteo_test.go` (httptest.Server, `reflect.DeepEqual` on `[]
 
 ### 4.5 Resiliency to running out of budget.
 
-If the API runs out of budget it will fail. I would like the mail to include such information. 
+If the API runs out of budget it will fail. I would like the mail to include such information.
 
 ### 4. Cost note to flag for the user (not a code change)
 
