@@ -50,9 +50,9 @@ jobs:
       with:
         filters: |
           shared: &shared
-            - 'shared/**'
-            - 'go.work'
-            - 'go.work.sum'
+            - 'internal/**'
+            - 'go.mod'
+            - 'go.sum'
           alert-job:
             - *shared
             - 'alert-job/**'
