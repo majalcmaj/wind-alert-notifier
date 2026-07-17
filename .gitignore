@@ -1,7 +1,8 @@
 bin/
 test-coverage.out
 .docker-built
-.env
+.job-env
+.web-env
 terraform/terraform.tfvars
 terraform/.terraform/
 terraform/.terraform.lock.hcl
