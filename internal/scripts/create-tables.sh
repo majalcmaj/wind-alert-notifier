@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/teusr/bin/env bash
 set -euo pipefail
 
 ENDPOINT="${DYNAMODB_ENDPOINT:-http://localhost:8000}"

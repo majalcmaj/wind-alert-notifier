@@ -3,27 +3,27 @@ GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint@
 
 CHECK_DOCKER = @docker info >/dev/null 2>&1 || (echo "Error: Docker daemon not running" >&2; exit 1)
 
-INTERNAL_SRCS := $(shell find internal/ -name '*.go' -not -path '*/vendor/*') internal/dynamo.yml
-JS_SRCS := $(shell find web/ -name '*.js' -not -path '*/vendor/*' -not -path '*/node_modules/*')
-WEB_SRCS := $(shell find web/ -name '*.go' -not -path '*/vendor/*') $(INTERNAL_SRCS) $(JS_SRCS)
-JOB_SRCS := $(shell find alert-job/ -name '*.go' -not -path '*/vendor/*') $(INTERNAL_SRCS)
+INTERNAL_SRCS := $(shell find internal/ -type f -not -path '*/vendor/*') internal/dynamo.yml
+WEB_SRCS := $(shell find web/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
+JOB_SRCS := $(shell find alert-job/ -type f -not -path '*/vendor/*') $(INTERNAL_SRCS)
 BIN_DIR ?= bin
 
 .PHONY: clean build-web build-alert build-docker build-rie-proxy clean test test-coverage fmt lint lint-fix
 
-clean:
-	[ ! -d bin ] || rm -rf bin
+build: build-web build-job
 
 $(BIN_DIR)/wind-alert-web: $(WEB_SRCS) $(JS_SRCS)
 	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web web/main.go
 
 build-web: $(BIN_DIR)/wind-alert-web
 
-
 $(BIN_DIR)/wind-alert-job: $(JOB_SRCS)
 	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job alert-job/main.go
 
 build-job: $(BIN_DIR)/wind-alert-job
+
+clean:
+	[ ! -d bin ] || rm -rf bin
 
 test:
 	go test -v ./...
