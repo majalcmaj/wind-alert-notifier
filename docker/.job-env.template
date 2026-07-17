@@ -1,2 +1,9 @@
-OPENWEATHER_TOKEN=<Your openweather token>
-ICM_METEO_TOKEN=<Meteo token>
+OPENWEATHER_TOKEN=<Your token>
+ICM_METEO_TOKEN=<Your token>
+
+LOCAL_MODE=true
+
+AWS_REGION=eu-central-1
+AWS_ACCESS_KEY_ID=local
+AWS_SECRET_ACCESS_KEY=local
+DYNAMODB_ENDPOINT=http://localhost:8000

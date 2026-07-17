@@ -24,6 +24,7 @@ services:
         binary: bin/wind-alert-job
     depends_on:
       - dynamodb-local
+    entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
     ports:
       - "9090:8080"
     env_file: .job-env
@@ -39,13 +40,13 @@ services:
       dockerfile: docker/lambda.Dockerfile
       args:
         binary: bin/wind-alert-web
+    depends_on:
+      - dynamodb-local
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
     ports:
       - "9081:8080"
     env_file:
       - .web-env
-    environment:
-      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
   rie-proxy:
     build:
       context: ..
