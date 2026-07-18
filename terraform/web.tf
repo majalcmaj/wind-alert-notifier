@@ -58,7 +58,7 @@ resource "aws_iam_role_policy" "wind_alert_web_dynamodb" {
 
 data "archive_file" "web" {
   type        = "zip"
-  source_file = "${path.module}/../bin/wind-alert-web"
+  source_file = "${path.module}/../bin/wind-alert-web/bootstrap"
   output_path = "${path.module}/../bin/wind-alert-web.zip"
 }
 
@@ -69,7 +69,7 @@ resource "aws_lambda_function" "wind-alert-web" {
   role             = aws_iam_role.wind_alert_web.arn
 
   runtime     = local.lambda_runtime
-  handler     = "wind-alert-web.handler"
+  handler     = "handler"
   memory_size = 128
   timeout     = 10
 

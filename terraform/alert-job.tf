@@ -66,7 +66,7 @@ resource "aws_iam_role_policy" "ses" {
 
 data "archive_file" "alert-job" {
   type        = "zip"
-  source_file = "${path.module}/../bin/wind-alert-job"
+  source_file = "${path.module}/../bin/wind-alert-job/bootstrap"
   output_path = "${path.module}/../bin/wind-alert-job.zip"
 }
 
@@ -78,7 +78,7 @@ resource "aws_lambda_function" "wind-alert-job" {
 
 
   runtime     = local.lambda_runtime
-  handler     = "wind-alert-job.handler"
+  handler     = "handler"
   memory_size = 128
   timeout     = 10
 

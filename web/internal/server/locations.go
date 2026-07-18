@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -17,6 +18,7 @@ type locationFormData struct {
 func (s *Server) locationsPage(w http.ResponseWriter, r *http.Request) {
 	locs, err := s.ds.LoadLocations(r.Context())
 	if err != nil {
+		log.Printf("load locations: %v", err)
 		httpError(w, http.StatusInternalServerError, "failed to load locations")
 		return
 	}

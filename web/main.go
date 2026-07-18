@@ -17,6 +17,6 @@ func main() {
 		log.Fatal(err)
 	}
 	srv := server.New(st)
-	handler := server.BasicAuth(srv.Routes())
+	handler := server.AccessLog(server.BasicAuth(srv.Routes()))
 	lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)
 }
