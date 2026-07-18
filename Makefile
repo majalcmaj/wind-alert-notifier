@@ -15,15 +15,15 @@ BIN_DIR ?= bin
 .PHONY: build
 build: build-web build-job build-rie-proxy
 
-$(BIN_DIR)/wind-alert-job: $(JOB_SRCS)
-	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job ./alert-job
+$(BIN_DIR)/wind-alert-job/bootstrap: $(JOB_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-job/bootstrap ./alert-job
 .PHONY: build-job
-build-job: $(BIN_DIR)/wind-alert-job
+build-job: $(BIN_DIR)/wind-alert-job/bootstrap
 
-$(BIN_DIR)/wind-alert-web: $(WEB_SRCS) $(JS_SRCS)
-	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web ./web
+$(BIN_DIR)/wind-alert-web/bootstrap: $(WEB_SRCS) $(JS_SRCS)
+	go build -tags lambda.norpc -o $(BIN_DIR)/wind-alert-web/bootstrap ./web
 .PHONY: build-web
-build-web: $(BIN_DIR)/wind-alert-web
+build-web: $(BIN_DIR)/wind-alert-web/bootstrap
 
 $(BIN_DIR)/rie-proxy: docker/rie-proxy/main.go
 	CGO_ENABLED=0 go build -o $(BIN_DIR)/rie-proxy ./docker/rie-proxy
@@ -101,6 +101,6 @@ run-job:
 
 .PHONY: run-job-aws
 run-job-aws:
-	aws lambda invoke --region eu-central-1 --function-name wind-alert --cli-binary-format raw-in-base64-out --payload '{}' /tmp/wind-alert-invoke.json
+	aws lambda invoke --region eu-central-1 --function-name wind-alert-job --cli-binary-format raw-in-base64-out --payload '{}' /tmp/wind-alert-invoke.json
 	@cat /tmp/wind-alert-invoke.json | jq .
 	@aws logs tail /aws/lambda/wind-alert --region eu-central-1 --since 2m

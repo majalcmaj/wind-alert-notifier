@@ -21,7 +21,7 @@ services:
       context: ..
       dockerfile: docker/lambda.Dockerfile
       args:
-        binary: bin/wind-alert-job
+        binary: bin/wind-alert-job/bootstrap
     depends_on:
       - dynamodb-local
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]
@@ -39,7 +39,7 @@ services:
       context: ..
       dockerfile: docker/lambda.Dockerfile
       args:
-        binary: bin/wind-alert-web
+        binary: bin/wind-alert-web/bootstrap
     depends_on:
       - dynamodb-local
     entrypoint: ["/usr/local/bin/aws-lambda-rie", "./main"]

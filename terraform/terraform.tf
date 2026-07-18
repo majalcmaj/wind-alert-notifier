@@ -24,20 +24,6 @@ provider "aws" {
 locals {
   account_id = "513532022998"
   region     = "eu-central-1"
-  ecr_url    = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com"
 
-  # Shared by every aws_ecr_repository's lifecycle policy.
-  ecr_lifecycle_policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Expire untagged images after 7 days"
-      selection = {
-        tagStatus   = "untagged"
-        countType   = "sinceImagePushed"
-        countUnit   = "days"
-        countNumber = 7
-      }
-      action = { type = "expire" }
-    }]
-  })
+  lambda_runtime = "provided.al2023"
 }

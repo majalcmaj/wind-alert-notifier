@@ -11,23 +11,6 @@ variable "icm_meteo_token" {
   sensitive   = true
 }
 
-# ECR
-
-resource "aws_ecr_repository" "wind_alert" {
-  name = "wind-alert"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  force_delete = true
-}
-
-resource "aws_ecr_lifecycle_policy" "wind_alert" {
-  repository = aws_ecr_repository.wind_alert.name
-  policy     = local.ecr_lifecycle_policy
-}
-
 # IAM
 
 resource "aws_iam_role" "wind_alert" {
@@ -81,23 +64,29 @@ resource "aws_iam_role_policy" "ses" {
 
 # Lambda
 
-resource "aws_lambda_function" "wind_alert" {
-  function_name = "wind-alert"
-  role          = aws_iam_role.wind_alert.arn
-  package_type  = "Image"
-  image_uri     = "${local.ecr_url}/wind-alert:latest"
-  memory_size   = 128
-  timeout       = 10
+data "archive_file" "alert-job" {
+  type        = "zip"
+  source_file = "${path.module}/../bin/wind-alert-job"
+  output_path = "${path.module}/../bin/wind-alert-job.zip"
+}
+
+resource "aws_lambda_function" "wind-alert-job" {
+  function_name    = "wind-alert-job"
+  filename         = data.archive_file.alert-job.output_path
+  source_code_hash = data.archive_file.alert-job.output_base64sha256
+  role             = aws_iam_role.wind_alert.arn
+
+
+  runtime     = local.lambda_runtime
+  handler     = "wind-alert-job.handler"
+  memory_size = 128
+  timeout     = 10
+
 
   environment {
     variables = {
       OPENWEATHER_TOKEN = var.openweather_token
       ICM_METEO_TOKEN   = var.icm_meteo_token
     }
-  }
-
-  # image_uri is managed by CI (aws lambda update-function-code after each push)
-  lifecycle {
-    ignore_changes = [image_uri]
   }
 }
